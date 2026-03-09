@@ -1,8 +1,8 @@
-# Current Task: 0.2 — Abstraction Layer for Testability
+# Current Task: 0.3 — Centralized Configuration System
 
-**PRD Reference:** Phase 0, Task 0.2
-**Goal:** Define `IMemoryProvider`, implement `LinuxMemoryProvider` (reads `/proc`) and `MockMemoryProvider` (fake data), wire DI in `Program.cs` to auto-select based on OS platform.
-**Layer(s) touched:** Core (interface + implementations), Agent (DI registration, Worker update)
+**PRD Reference:** Phase 0, Task 0.3
+**Goal:** Build `SentinelOptions` in `Contracts`, bind it to `appsettings.json` + environment variables, and thread it through `Program.cs` and `Worker.cs` so all settings flow from one place.
+**Layer(s) touched:** Contracts (new options class), Agent (registration, appsettings, Worker)
 
 ---
 
@@ -10,65 +10,57 @@
 
 | File | Action | Layer |
 |---|---|---|
-| `Core/Common/Result.cs` | Create — `Result<T>` + `Error` | Core |
-| `Core/Providers/RssMemoryReading.cs` | Create — value type | Core |
-| `Core/Providers/HeapMetadata.cs` | Create — value type | Core |
-| `Core/Providers/IMemoryProvider.cs` | Create — interface | Core |
-| `Core/Providers/LinuxMemoryProvider.cs` | Create — `/proc` reader | Core |
-| `Core/Providers/MockMemoryProvider.cs` | Create — fake data | Core |
-| `Agent/Program.cs` | Update — DI swap on OS | Agent |
-| `Agent/Worker.cs` | Update — inject provider, fix UtcNow, LoggerMessage | Agent |
+| `Contracts/Options/SentinelOptions.cs` | Create — options root + nested ThresholdOptions | Contracts |
+| `Agent/appsettings.json` | Update — add full `Sentinel` config block with defaults | Agent |
+| `Agent/Program.cs` | Update — `Configure<SentinelOptions>`, use options for provider selection | Agent |
+| `Agent/Worker.cs` | Update — inject `IOptionsMonitor<SentinelOptions>`, drive polling interval | Agent |
 
 ---
 
 ## Steps
 
-- [x] **Step 1 — `Core/Common/Result.cs`**
-  - `Result<T>` readonly record struct with `IsSuccess`, `Value?`, `Error?`
-  - `Error` readonly record struct with `Code`, `Message`
-  - Static factory: `Result<T>.Success(value)` and `Result<T>.Failure(error)`
+- [x] **Step 1 — `Contracts/Options/SentinelOptions.cs`**
+  - Create `Contracts/Options/` directory
+  - `ThresholdOptions` — `RssLimitPercentage` (default 80.0), `Gen2GrowthLimitMb` (default 100.0)
+  - `SentinelOptions` — the root bound to `"Sentinel"` config section:
+    - `TargetProcessName` (default `"dotnet"`)
+    - `PollingIntervalSeconds` (default `5`)
+    - `CoolingPeriodMinutes` (default `3`)
+    - `StorageProvider` (default `"Local"`)
+    - `Thresholds` — nested `ThresholdOptions`
+  - All properties `init`-only; no Data Annotations (use `IValidateOptions<T>` later)
 
-- [x] **Step 2 — `Core/Providers/RssMemoryReading.cs`**
-  - Record struct: `RssBytes`, `PssBytes`, `VmSizeBytes`, `CapturedAt` (DateTimeOffset)
+- [x] **Step 2 — `Agent/appsettings.json`**
+  - Add a `Sentinel` block with all defaults matching the class defaults:
+    ```json
+    "Sentinel": {
+      "TargetProcessName": "dotnet",
+      "PollingIntervalSeconds": 5,
+      "CoolingPeriodMinutes": 3,
+      "StorageProvider": "Local",
+      "Thresholds": {
+        "RssLimitPercentage": 80.0,
+        "Gen2GrowthLimitMb": 100.0
+      }
+    }
+    ```
 
-- [x] **Step 3 — `Core/Providers/HeapMetadata.cs`**
-  - Record struct: `Gen0Bytes`, `Gen1Bytes`, `Gen2Bytes`, `LohBytes`, `PohBytes`, `CapturedAt`
+- [x] **Step 3 — `Agent/Program.cs`**
+  - Register: `builder.Services.Configure<SentinelOptions>(builder.Configuration.GetSection("Sentinel"))`
+  - Replace the raw `builder.Configuration["Sentinel:TargetProcessName"]` string lookup with `IOptions<SentinelOptions>` resolved from the service provider
 
-- [x] **Step 4 — `Core/Providers/IMemoryProvider.cs`**
-  - `bool IsAvailable { get; }`
-  - `ValueTask<RssMemoryReading> GetRssMemoryAsync(CancellationToken ct)`
-  - `ValueTask<HeapMetadata> GetHeapMetadataAsync(CancellationToken ct)`
+- [x] **Step 4 — `Agent/Worker.cs`**
+  - Replace the hardcoded `TimeSpan.FromSeconds(5)` delay with `IOptionsMonitor<SentinelOptions>` so changes survive without a restart (hot-reload friendly)
+  - Add a `Log.PollingIntervalUsed` log message at startup showing the active interval
 
-- [x] **Step 5 — `Core/Providers/LinuxMemoryProvider.cs`**
-  - Constructor takes `int pid`
-  - `IsAvailable`: returns `true` only on Linux (`OperatingSystem.IsLinux()`)
-  - `GetRssMemoryAsync`: parses `/proc/[pid]/status` for `VmRSS`, `VmSize`; parses `/proc/[pid]/smaps_rollup` for PSS
-  - `GetHeapMetadataAsync`: returns empty `HeapMetadata` (ClrMD integration is Phase 1+)
-
-- [x] **Step 6 — `Core/Providers/MockMemoryProvider.cs`**
-  - `IsAvailable`: always `true`
-  - Returns deterministic fake readings (fixed values + small simulated growth each call)
-  - Constructor takes optional `MockMemoryOptions` for configurable baseline values
-
-- [x] **Step 7 — `Agent/Program.cs`**
-  - Detect target PID: find process by name from config (`TargetProcessName`, default `"dotnet"`) — on Windows, fall back to current process PID for Mock mode
-  - Register `IMemoryProvider`: Linux → `LinuxMemoryProvider`, else → `MockMemoryProvider`
-
-- [x] **Step 8 — `Agent/Worker.cs`**
-  - Inject `IMemoryProvider`
-  - Call `GetRssMemoryAsync` each iteration, log the result
-  - Fix `DateTimeOffset.Now` → `DateTimeOffset.UtcNow`
-  - Replace `logger.LogInformation(...)` with a `Log.cs` partial class using `[LoggerMessage]`
-
-- [x] **Step 9 — `dotnet build`**
-  - Must succeed with 0 warnings, 0 errors
+- [x] **Step 5 — `dotnet build`**
+  - 0 warnings, 0 errors
 
 ---
 
 ## Acceptance Criteria (DoD from PRD)
 
-- `IMemoryProvider` is defined in `Core/Providers/` — no reference to `Agent`
-- `LinuxMemoryProvider` and `MockMemoryProvider` both implement it
-- `Program.cs` selects the provider based on `OperatingSystem.IsLinux()`
-- `dotnet run` on Windows starts the Agent using `MockMemoryProvider` without crashing
+- `SentinelOptions` lives in `Contracts` — no logic, no Data Annotations
+- `appsettings.json` contains the full `Sentinel` block
+- Setting `Sentinel__PollingIntervalSeconds=2` as an environment variable overrides the json value
 - `dotnet build` — 0 warnings, 0 errors

@@ -1,16 +1,22 @@
 using MemSentinel.Agent;
 using MemSentinel.Agent.Logging;
+using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Providers;
+using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddSingleton<IMemoryProvider>(_ =>
+builder.Services.Configure<SentinelOptions>(
+    builder.Configuration.GetSection(SentinelOptions.SectionName));
+
+builder.Services.AddSingleton<IMemoryProvider>(sp =>
 {
+    var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
+
     if (OperatingSystem.IsLinux())
     {
-        var targetName = builder.Configuration["Sentinel:TargetProcessName"] ?? "dotnet";
         var target = System.Diagnostics.Process
-            .GetProcessesByName(targetName)
+            .GetProcessesByName(options.TargetProcessName)
             .FirstOrDefault();
 
         var pid = target?.Id ?? System.Diagnostics.Process.GetCurrentProcess().Id;

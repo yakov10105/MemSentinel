@@ -150,12 +150,12 @@ Action: Build a robust `SentinelOptions` class mapped to `appsettings.json` and 
 
 **Required Settings:**
 
-- [ ] **TargetProcessName:** (Default: dotnet)
-- [ ] **PollingIntervalSeconds:** (Default: 5)
-- [ ] **Thresholds:** { RssLimitPercentage: 80, Gen2GrowthLimitMB: 100 }
-- [ ] **CoolingPeriodMinutes:** Time to wait between Snapshot A and B.
-- [ ] **StorageProvider:** S3, Azure, or Local.
-      **DoD:** Changing an Environment Variable in the terminal overrides the `appsettings.json` value.
+- [x] **TargetProcessName:** (Default: dotnet)
+- [x] **PollingIntervalSeconds:** (Default: 5)
+- [x] **Thresholds:** { RssLimitPercentage: 80, Gen2GrowthLimitMB: 100 }
+- [x] **CoolingPeriodMinutes:** Time to wait between Snapshot A and B.
+- [x] **StorageProvider:** S3, Azure, or Local.
+      **DoD:** Changing an Environment Variable in the terminal overrides the `appsettings.json` value. ✅ Done
 
 **Task 0.4: Logging & Observability (Serilog Implementation)**
 Action: Set up structured logging. When a leak happens, logs must be searchable.
