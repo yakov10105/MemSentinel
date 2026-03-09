@@ -1,0 +1,44 @@
+# Git
+.git/
+.gitignore
+
+# Build output (rebuilt inside Docker)
+**/bin/
+**/obj/
+publish/
+
+# Test projects (not needed in production image)
+tests/
+
+# Dashboard (separate build / separate image)
+src/MemSentinel.Dashboard/
+
+# Node artifacts
+**/node_modules/
+**/.next/
+
+# Docs & tooling
+docs/
+.claude/
+.vscode/
+.idea/
+*.md
+!src/**/*.md
+
+# Secrets & local config
+.env
+.env.*
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Diagnostic artifacts
+*.gcdump
+*.dmp
+*.nettrace
+dumps/
+snapshots/

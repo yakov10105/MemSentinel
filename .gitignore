@@ -1,0 +1,62 @@
+# .NET build output
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.DotSettings.user
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Diagnostic artifacts (never commit heap dumps)
+*.gcdump
+*.dmp
+*.nettrace
+snapshots/
+
+# Dashboard build output
+src/MemSentinel.Dashboard/.next/
+src/MemSentinel.Dashboard/node_modules/
+src/MemSentinel.Dashboard/out/
+src/MemSentinel.Dashboard/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test results & coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# Environment / secrets
+.env
+.env.local
+.env*.local
+appsettings.Development.json
+appsettings.Local.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# Claude Code personal preferences
+CLAUDE.local.md
+
+# Claude auto-memory (remove this line if you want to commit team memory)
+.claude/memory/

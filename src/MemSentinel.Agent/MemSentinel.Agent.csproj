@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-MemSentinel.Agent-43106f9a-f668-46d9-8d64-6eb8a4c19e74</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MemSentinel.Core\MemSentinel.Core.csproj" />
+    <ProjectReference Include="..\MemSentinel.Contracts\MemSentinel.Contracts.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MemSentinel.Agent/MemSentinel.Agent.csproj" />
+    <Project Path="src/MemSentinel.Contracts/MemSentinel.Contracts.csproj" />
+    <Project Path="src/MemSentinel.Core/MemSentinel.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MemSentinel.UnitTests/MemSentinel.UnitTests.csproj" />
+  </Folder>
+</Solution>
