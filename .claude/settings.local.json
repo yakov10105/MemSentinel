@@ -5,7 +5,10 @@
       "Bash(dotnet sln:*)",
       "Bash(/c/Users/Me/Desktop/MemSentinel/.dockerignore:*)",
       "Bash(/c/Users/Me/Desktop/MemSentinel/README.md:*)",
-      "Bash(dotnet add:*)"
+      "Bash(dotnet add:*)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(mv C:\\\\Users\\\\Me\\\\Desktop\\\\MemSentinel\\\\src\\\\memsentinel-dashboard:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

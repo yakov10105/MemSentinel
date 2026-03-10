@@ -1,44 +1,59 @@
-# Current Task: 0.5 — Global Exception Handling & "Self-Preservation"
+# Current Task: 0.6 — Next.js + TypeScript Scaffolding
 
-**PRD Reference:** Phase 0, Task 0.5
-**Goal:** The sidecar must never crash the Pod. Wrap the polling loop in a circuit breaker that sleeps 10 minutes after 3 consecutive failures.
-**Layer(s) touched:** Agent only
+**PRD Reference:** Phase 0, Task 0.6
+**Goal:** Scaffold the dashboard, define TS interfaces mirroring C# Contracts, set up React Query, and build a Health page that fetches from the Agent.
+**Layer(s) touched:** Agent (add HTTP server), Dashboard (new Next.js project)
 
 ---
 
-## Files Modified
+## Files Created / Modified
 
 | File | Action |
 |---|---|
-| `Agent/Logging/Log.cs` | Added `WatchdogFailure` and `CircuitBreakerOpen` log methods |
-| `Agent/Worker.cs` | Refactored `ExecuteAsync` with try/catch circuit breaker; extracted `DoWorkAsync` |
-
-## What Was Already Done (from Task 0.3)
-
-- `TaskScheduler.UnobservedTaskException` handler — `Program.cs` ✅
+| `Agent/MemSentinel.Agent.csproj` | SDK → `Microsoft.NET.Sdk.Web`; removed `Microsoft.Extensions.Hosting` (included by Web SDK) |
+| `Agent/Program.cs` | Migrated to `WebApplication.CreateBuilder`; added `GET /health` endpoint |
+| `Agent/appsettings.json` | Added `"Urls": "http://+:5000"` |
+| `Dashboard/` | Scaffolded via `create-next-app@latest` (Next.js 16, TypeScript, Tailwind, App Router) |
+| `Dashboard/lib/types/contracts.ts` | `HealthStatus`, `RssMemoryReading`, `HeapMetadata`, `MemorySnapshot`, `LeakReport`, `LeakingType` |
+| `Dashboard/lib/api/agent.ts` | `agentFetch<T>` + `fetchHealth()` using `NEXT_PUBLIC_AGENT_URL` |
+| `Dashboard/lib/hooks/useHealth.ts` | `useHealth()` — `useQuery` wrapping `fetchHealth`, 10s refetch |
+| `Dashboard/app/providers.tsx` | `QueryClientProvider` client component wrapper |
+| `Dashboard/app/layout.tsx` | Updated metadata; wrapped children in `<Providers>` |
+| `Dashboard/app/page.tsx` | Health status page with green/yellow/red indicator |
+| `Dashboard/.env.local` | `NEXT_PUBLIC_AGENT_URL=http://localhost:5000` |
 
 ---
 
 ## Steps
 
-- [x] **Step 1 — `Logging/Log.cs`**
-  - `WatchdogFailure(ILogger, Exception, int failureCount)` — Warning
-  - `CircuitBreakerOpen(ILogger, TimeSpan duration)` — Critical
+- [x] **Step 1 — Agent: HTTP server**
+  - SDK: `Microsoft.NET.Sdk.Web`
+  - `WebApplication.CreateBuilder` + `app.MapGet("/health", ...)`
 
-- [x] **Step 2 — `Worker.cs`**
-  - `consecutiveFailures` counter + `CircuitBreakerThreshold = 3` + `CircuitBreakerSleep = 10min`
-  - `DoWorkAsync` extracted as private method
-  - `OperationCanceledException` → clean break (not counted as failure)
-  - 3 consecutive exceptions → `CircuitBreakerOpen` log + 10-minute `Task.Delay` + counter reset
-  - Polling delay remains outside try block
+- [x] **Step 2 — `dotnet build`** — 0 warnings, 0 errors ✅
 
-- [x] **Step 3 — `dotnet build`**
-  - 0 warnings, 0 errors ✅
+- [x] **Step 3 — Scaffold Next.js**
+  - Next.js 16.1.6, TypeScript, Tailwind, App Router
+  - `@tanstack/react-query` installed
+
+- [x] **Step 4 — TypeScript contracts** (`lib/types/contracts.ts`)
+
+- [x] **Step 5 — API client + hook**
+
+- [x] **Step 6 — Health page** (`app/page.tsx`)
+
+- [x] **Step 7 — `npm run build`** — 0 type errors ✅
 
 ---
 
+## Notes
+
+- npm naming restrictions require lowercase; scaffold directory was renamed from `memsentinel-dashboard` → `MemSentinel.Dashboard` post-creation
+- Health page is a `"use client"` component; React Query hydrates client-side after static prerender shell
+
 ## Acceptance Criteria (DoD from PRD)
 
-- Exception in polling loop does not crash the host process ✅
-- After 3 consecutive failures: `CircuitBreakerOpen` logged + worker sleeps 10 minutes ✅
+- `GET /health` returns `{ "status": "ok", "version": "1.0.0" }` ✅
+- TypeScript interfaces structurally match C# DTOs ✅
 - `dotnet build` — 0 warnings, 0 errors ✅
+- `npm run build` — 0 type errors ✅

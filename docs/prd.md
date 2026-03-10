@@ -180,10 +180,10 @@ Action: Initialize the frontend with strict typing.
 
 **Sub-tasks:**
 
-- [ ] `npx create-next-app@latest` with Tailwind CSS and App Router.
-- [ ] Define TypeScript Interfaces that match the .NET Contracts (e.g., `IMemorySnapshot`, `ILeakReport`).
-- [ ] Set up Axios or React Query base hooks for the Agent's API.
-      **DoD:** A basic "Health" page in React successfully fetches a "Status: OK" from the .NET Agent.
+- [x] `npx create-next-app@latest` with Tailwind CSS and App Router.
+- [x] Define TypeScript Interfaces that match the .NET Contracts (e.g., `IMemorySnapshot`, `ILeakReport`).
+- [x] Set up Axios or React Query base hooks for the Agent's API.
+      **DoD:** A basic "Health" page in React successfully fetches a "Status: OK" from the .NET Agent. ✅ Done
 
 **Task 0.7: Docker & OpenShift "Manifest Zero"**
 Action: Create the multi-stage Dockerfile and the base YAML.

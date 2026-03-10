@@ -1,12 +1,12 @@
-using MemSentinel.Agent;
 using Log = MemSentinel.Agent.Logging.Log;
+using MemSentinel.Agent;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Formatting.Compact;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSerilog(lc => lc
     .ReadFrom.Configuration(builder.Configuration)
@@ -36,13 +36,15 @@ builder.Services.AddSingleton<IMemoryProvider>(sp =>
 
 builder.Services.AddHostedService<Worker>();
 
-var host = builder.Build();
+var app = builder.Build();
 
-var appLogger = host.Services.GetRequiredService<ILogger<Program>>();
+var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
 TaskScheduler.UnobservedTaskException += (_, e) =>
 {
     Log.UnobservedTaskException(appLogger, e.Exception);
     e.SetObserved();
 };
 
-host.Run();
+app.MapGet("/health", () => Results.Ok(new { status = "ok", version = "1.0.0" }));
+
+app.Run();
