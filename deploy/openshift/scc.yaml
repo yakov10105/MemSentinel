@@ -1,0 +1,57 @@
+# OpenShift-specific layer — apply AFTER deploy/k8s/ manifests.
+#
+# On vanilla Kubernetes, SYS_PTRACE is controlled by PodSecurity admission and
+# the capabilities field in securityContext (already set in deployment.yaml).
+# No additional resource is needed there.
+#
+# On OpenShift, the Security Context Constraints (SCC) system must also permit
+# the capability. Apply this file as a cluster-admin:
+#
+#   oc apply -f deploy/openshift/scc.yaml
+#
+# To verify binding:
+#   oc describe scc memsentinel-scc
+
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: memsentinel-scc
+  labels:
+    app.kubernetes.io/name: memsentinel
+    app.kubernetes.io/component: agent
+
+# Only the memsentinel service account may use this SCC
+users:
+  - system:serviceaccount:memsentinel:memsentinel
+
+allowPrivilegedContainer: false
+allowPrivilegeEscalation: false
+
+# SYS_PTRACE is the only capability MemSentinel requires
+allowedCapabilities:
+  - SYS_PTRACE
+defaultAddCapabilities: []
+requiredDropCapabilities:
+  - ALL
+
+# Process must not run as root
+runAsUser:
+  type: MustRunAsNonRoot
+
+seLinuxContext:
+  type: MustRunAs
+  seLinuxOptions:
+    type: spc_t   # Super-privileged container type — required for cross-process /proc access
+
+fsGroup:
+  type: RunAsAny
+
+supplementalGroups:
+  type: RunAsAny
+
+volumes:
+  - emptyDir
+  - configMap
+  - secret
+  - downwardAPI
+  - projected

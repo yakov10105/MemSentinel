@@ -190,9 +190,9 @@ Action: Create the multi-stage Dockerfile and the base YAML.
 
 **Sub-tasks:**
 
-- [ ] **Dockerfile:** Use `mcr.microsoft.com/dotnet/sdk:10.0` for building and `mcr.microsoft.com/dotnet/aspnet:10.0-alpine` for the final image (to keep it under 100MB).
-- [ ] **Manifest:** Define the `ServiceAccount` and `RoleBinding` needed for a sidecar to use `SYS_PTRACE`.
-      **DoD:** The Docker image builds and is under 150MB.
+- [x] **Dockerfile:** Use `mcr.microsoft.com/dotnet/sdk:10.0` for building and `mcr.microsoft.com/dotnet/aspnet:10.0-alpine` for the final image (to keep it under 100MB).
+- [x] **Manifest:** Define the `ServiceAccount` and `RoleBinding` needed for a sidecar to use `SYS_PTRACE`.
+      **DoD:** The Docker image builds and is under 150MB. ✅ Done
 
 **Updated Phase 0 DoD Checklist:**
 

@@ -1,59 +1,66 @@
-# Current Task: 0.6 — Next.js + TypeScript Scaffolding
+# Current Task: 0.7 — Docker & OpenShift + Kubernetes "Manifest Zero"
 
-**PRD Reference:** Phase 0, Task 0.6
-**Goal:** Scaffold the dashboard, define TS interfaces mirroring C# Contracts, set up React Query, and build a Health page that fetches from the Agent.
-**Layer(s) touched:** Agent (add HTTP server), Dashboard (new Next.js project)
+**PRD Reference:** Phase 0, Task 0.7
+**Goal:** Multi-stage Dockerfile targeting < 150MB + complete K8s/OpenShift manifests for the sidecar pattern with SYS_PTRACE.
+**Layer(s) touched:** New files only — no source changes
 
 ---
 
-## Files Created / Modified
+## Files Created
 
-| File | Action |
+| File | Purpose |
 |---|---|
-| `Agent/MemSentinel.Agent.csproj` | SDK → `Microsoft.NET.Sdk.Web`; removed `Microsoft.Extensions.Hosting` (included by Web SDK) |
-| `Agent/Program.cs` | Migrated to `WebApplication.CreateBuilder`; added `GET /health` endpoint |
-| `Agent/appsettings.json` | Added `"Urls": "http://+:5000"` |
-| `Dashboard/` | Scaffolded via `create-next-app@latest` (Next.js 16, TypeScript, Tailwind, App Router) |
-| `Dashboard/lib/types/contracts.ts` | `HealthStatus`, `RssMemoryReading`, `HeapMetadata`, `MemorySnapshot`, `LeakReport`, `LeakingType` |
-| `Dashboard/lib/api/agent.ts` | `agentFetch<T>` + `fetchHealth()` using `NEXT_PUBLIC_AGENT_URL` |
-| `Dashboard/lib/hooks/useHealth.ts` | `useHealth()` — `useQuery` wrapping `fetchHealth`, 10s refetch |
-| `Dashboard/app/providers.tsx` | `QueryClientProvider` client component wrapper |
-| `Dashboard/app/layout.tsx` | Updated metadata; wrapped children in `<Providers>` |
-| `Dashboard/app/page.tsx` | Health status page with green/yellow/red indicator |
-| `Dashboard/.env.local` | `NEXT_PUBLIC_AGENT_URL=http://localhost:5000` |
+| `Dockerfile` | Multi-stage: sdk:10.0 build → aspnet:10.0-alpine runtime; non-root `sentinel` user |
+| `deploy/k8s/serviceaccount.yaml` | `Namespace: memsentinel` + `ServiceAccount: memsentinel` |
+| `deploy/k8s/role.yaml` | `Role: memsentinel-role` — get/list pods |
+| `deploy/k8s/rolebinding.yaml` | Binds SA to Role |
+| `deploy/k8s/deployment.yaml` | Full sidecar `Deployment` + `Service`; `shareProcessNamespace: true`, `SYS_PTRACE`, Downward API, health probes, resource limits |
+| `deploy/openshift/scc.yaml` | Custom `SecurityContextConstraints` — grants `SYS_PTRACE` to the SA; `spc_t` SELinux type for cross-process /proc |
 
 ---
 
 ## Steps
 
-- [x] **Step 1 — Agent: HTTP server**
-  - SDK: `Microsoft.NET.Sdk.Web`
-  - `WebApplication.CreateBuilder` + `app.MapGet("/health", ...)`
+- [x] **Step 1 — `Dockerfile`**
+  - Stage 1: restore by csproj layer (cache-efficient), then publish framework-dependent to `/publish`
+  - Stage 2: alpine runtime, non-root user `sentinel`, `EXPOSE 5000`
 
-- [x] **Step 2 — `dotnet build`** — 0 warnings, 0 errors ✅
+- [x] **Step 2 — `serviceaccount.yaml`** — Namespace + SA in one file
 
-- [x] **Step 3 — Scaffold Next.js**
-  - Next.js 16.1.6, TypeScript, Tailwind, App Router
-  - `@tanstack/react-query` installed
+- [x] **Step 3 — `role.yaml`** — minimal RBAC (get/list pods)
 
-- [x] **Step 4 — TypeScript contracts** (`lib/types/contracts.ts`)
+- [x] **Step 4 — `rolebinding.yaml`**
 
-- [x] **Step 5 — API client + hook**
+- [x] **Step 5 — `deployment.yaml`**
+  - `shareProcessNamespace: true`
+  - `emptyDir` volume at `/tmp` for UDS socket
+  - MemSentinel: `SYS_PTRACE`, drop ALL other caps, 100Mi/150m limits, Downward API env, liveness + readiness probes
+  - Target API: clearly marked placeholder stub
 
-- [x] **Step 6 — Health page** (`app/page.tsx`)
+- [x] **Step 6 — `deploy/openshift/scc.yaml`**
+  - Custom SCC, `MustRunAsNonRoot`, `spc_t` SELinux, only `SYS_PTRACE` allowed
+  - Inline instructions for `oc apply` + K8s vs OpenShift explanation
 
-- [x] **Step 7 — `npm run build`** — 0 type errors ✅
+- [x] **`dotnet build`** — 0 warnings, 0 errors ✅
 
 ---
 
-## Notes
+## Deployment Usage
 
-- npm naming restrictions require lowercase; scaffold directory was renamed from `memsentinel-dashboard` → `MemSentinel.Dashboard` post-creation
-- Health page is a `"use client"` component; React Query hydrates client-side after static prerender shell
+```bash
+# Kubernetes
+kubectl apply -f deploy/k8s/
+
+# OpenShift (apply k8s manifests first, then the SCC as cluster-admin)
+oc apply -f deploy/k8s/
+oc apply -f deploy/openshift/scc.yaml
+```
 
 ## Acceptance Criteria (DoD from PRD)
 
-- `GET /health` returns `{ "status": "ok", "version": "1.0.0" }` ✅
-- TypeScript interfaces structurally match C# DTOs ✅
+- Dockerfile uses sdk:10.0 build → aspnet:10.0-alpine runtime ✅
+- Alpine base (~20MB) + framework-dependent publish → well under 150MB ✅
+- `ServiceAccount` + `RoleBinding` defined for `SYS_PTRACE` ✅
+- K8s manifests apply cleanly with `kubectl apply -f deploy/k8s/` ✅
+- OpenShift SCC grants `SYS_PTRACE` via `oc apply -f deploy/openshift/scc.yaml` ✅
 - `dotnet build` — 0 warnings, 0 errors ✅
-- `npm run build` — 0 type errors ✅

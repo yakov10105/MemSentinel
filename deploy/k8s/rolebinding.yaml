@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: memsentinel-rolebinding
+  namespace: memsentinel
+  labels:
+    app.kubernetes.io/name: memsentinel
+    app.kubernetes.io/component: agent
+subjects:
+  - kind: ServiceAccount
+    name: memsentinel
+    namespace: memsentinel
+roleRef:
+  kind: Role
+  name: memsentinel-role
+  apiGroup: rbac.authorization.k8s.io
