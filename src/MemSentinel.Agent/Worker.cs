@@ -39,7 +39,8 @@ public sealed class Worker(
                 if (consecutiveFailures >= CircuitBreakerThreshold)
                 {
                     Log.CircuitBreakerOpen(logger, CircuitBreakerSleep);
-                    await Task.Delay(CircuitBreakerSleep, stoppingToken);
+                    try { await Task.Delay(CircuitBreakerSleep, stoppingToken); }
+                    catch (OperationCanceledException) { return; }
                     consecutiveFailures = 0;
                 }
             }

@@ -142,7 +142,7 @@ Action: Since you cannot run Linux /proc commands on a Windows dev machine, you 
 
 - [x] Define `IMemoryProvider`: Methods like `GetRssMemory()` and `GetHeapMetadata()`.
 - [x] Create `LinuxMemoryProvider` (reads /proc) and `MockMemoryProvider` (for local development).
-- [x] Implement Dependency Injection (DI) in `Program.cs` to swap these based on the environment variable `ASPNETCORE_ENVIRONMENT`.
+- [x] Implement Dependency Injection (DI) in `Program.cs` to swap these based on `OperatingSystem.IsLinux()` (more reliable than `ASPNETCORE_ENVIRONMENT` in sidecar containers).
       **DoD:** The Agent starts on a Windows machine using Mock data without crashing. ✅ Done
 
 **Task 0.3: Centralized Configuration System (The "Policy" Engine)**
@@ -196,10 +196,10 @@ Action: Create the multi-stage Dockerfile and the base YAML.
 
 **Updated Phase 0 DoD Checklist:**
 
-- [ ] **Solution Integrity:** All projects are linked; `MemSentinel.Core` has no dependencies on `MemSentinel.Agent` (Clean Architecture).
-- [ ] **Environment Agnostic:** The code runs on Windows (Mock mode) and Linux (Real mode) without code changes.
-- [ ] **Type Safety:** TypeScript interfaces perfectly match C# DTOs.
-- [ ] **Shielding:** The Agent has resource limits defined and a circuit breaker implemented.
+- [x] **Solution Integrity:** All projects are linked; `MemSentinel.Core` has no dependencies on `MemSentinel.Agent` (Clean Architecture).
+- [x] **Environment Agnostic:** The code runs on Windows (Mock mode) and Linux (Real mode) without code changes.
+- [x] **Type Safety:** TypeScript interfaces perfectly match C# DTOs.
+- [x] **Shielding:** The Agent has resource limits defined and a circuit breaker implemented.
 
 ### Phase 1: The "Plumbing" & Connectivity (Foundational)
 

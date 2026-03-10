@@ -1,8 +1,7 @@
 using Log = MemSentinel.Agent.Logging.Log;
 using MemSentinel.Agent;
+using MemSentinel.Agent.Infrastructure;
 using MemSentinel.Contracts.Options;
-using MemSentinel.Core.Providers;
-using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Formatting.Compact;
 
@@ -17,22 +16,7 @@ builder.Services.AddSerilog(lc => lc
 builder.Services.Configure<SentinelOptions>(
     builder.Configuration.GetSection(SentinelOptions.SectionName));
 
-builder.Services.AddSingleton<IMemoryProvider>(sp =>
-{
-    var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
-
-    if (OperatingSystem.IsLinux())
-    {
-        var target = System.Diagnostics.Process
-            .GetProcessesByName(options.TargetProcessName)
-            .FirstOrDefault();
-
-        var pid = target?.Id ?? System.Diagnostics.Process.GetCurrentProcess().Id;
-        return new LinuxMemoryProvider(pid);
-    }
-
-    return new MockMemoryProvider();
-});
+builder.Services.AddMemoryProvider();
 
 builder.Services.AddHostedService<Worker>();
 
