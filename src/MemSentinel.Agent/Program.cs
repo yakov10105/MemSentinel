@@ -1,10 +1,18 @@
 using MemSentinel.Agent;
-using MemSentinel.Agent.Logging;
+using Log = MemSentinel.Agent.Logging.Log;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
+using Serilog;
+using Serilog.Formatting.Compact;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddSerilog(lc => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.WithProperty("PodName", Environment.GetEnvironmentVariable("POD_NAME") ?? "local")
+    .Enrich.WithProperty("Namespace", Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? "local")
+    .WriteTo.Console(new CompactJsonFormatter()));
 
 builder.Services.Configure<SentinelOptions>(
     builder.Configuration.GetSection(SentinelOptions.SectionName));

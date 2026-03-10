@@ -1,66 +1,44 @@
-# Current Task: 0.3 — Centralized Configuration System
+# Current Task: 0.5 — Global Exception Handling & "Self-Preservation"
 
-**PRD Reference:** Phase 0, Task 0.3
-**Goal:** Build `SentinelOptions` in `Contracts`, bind it to `appsettings.json` + environment variables, and thread it through `Program.cs` and `Worker.cs` so all settings flow from one place.
-**Layer(s) touched:** Contracts (new options class), Agent (registration, appsettings, Worker)
+**PRD Reference:** Phase 0, Task 0.5
+**Goal:** The sidecar must never crash the Pod. Wrap the polling loop in a circuit breaker that sleeps 10 minutes after 3 consecutive failures.
+**Layer(s) touched:** Agent only
 
 ---
 
-## Files to Create / Modify
+## Files Modified
 
-| File | Action | Layer |
-|---|---|---|
-| `Contracts/Options/SentinelOptions.cs` | Create — options root + nested ThresholdOptions | Contracts |
-| `Agent/appsettings.json` | Update — add full `Sentinel` config block with defaults | Agent |
-| `Agent/Program.cs` | Update — `Configure<SentinelOptions>`, use options for provider selection | Agent |
-| `Agent/Worker.cs` | Update — inject `IOptionsMonitor<SentinelOptions>`, drive polling interval | Agent |
+| File | Action |
+|---|---|
+| `Agent/Logging/Log.cs` | Added `WatchdogFailure` and `CircuitBreakerOpen` log methods |
+| `Agent/Worker.cs` | Refactored `ExecuteAsync` with try/catch circuit breaker; extracted `DoWorkAsync` |
+
+## What Was Already Done (from Task 0.3)
+
+- `TaskScheduler.UnobservedTaskException` handler — `Program.cs` ✅
 
 ---
 
 ## Steps
 
-- [x] **Step 1 — `Contracts/Options/SentinelOptions.cs`**
-  - Create `Contracts/Options/` directory
-  - `ThresholdOptions` — `RssLimitPercentage` (default 80.0), `Gen2GrowthLimitMb` (default 100.0)
-  - `SentinelOptions` — the root bound to `"Sentinel"` config section:
-    - `TargetProcessName` (default `"dotnet"`)
-    - `PollingIntervalSeconds` (default `5`)
-    - `CoolingPeriodMinutes` (default `3`)
-    - `StorageProvider` (default `"Local"`)
-    - `Thresholds` — nested `ThresholdOptions`
-  - All properties `init`-only; no Data Annotations (use `IValidateOptions<T>` later)
+- [x] **Step 1 — `Logging/Log.cs`**
+  - `WatchdogFailure(ILogger, Exception, int failureCount)` — Warning
+  - `CircuitBreakerOpen(ILogger, TimeSpan duration)` — Critical
 
-- [x] **Step 2 — `Agent/appsettings.json`**
-  - Add a `Sentinel` block with all defaults matching the class defaults:
-    ```json
-    "Sentinel": {
-      "TargetProcessName": "dotnet",
-      "PollingIntervalSeconds": 5,
-      "CoolingPeriodMinutes": 3,
-      "StorageProvider": "Local",
-      "Thresholds": {
-        "RssLimitPercentage": 80.0,
-        "Gen2GrowthLimitMb": 100.0
-      }
-    }
-    ```
+- [x] **Step 2 — `Worker.cs`**
+  - `consecutiveFailures` counter + `CircuitBreakerThreshold = 3` + `CircuitBreakerSleep = 10min`
+  - `DoWorkAsync` extracted as private method
+  - `OperationCanceledException` → clean break (not counted as failure)
+  - 3 consecutive exceptions → `CircuitBreakerOpen` log + 10-minute `Task.Delay` + counter reset
+  - Polling delay remains outside try block
 
-- [x] **Step 3 — `Agent/Program.cs`**
-  - Register: `builder.Services.Configure<SentinelOptions>(builder.Configuration.GetSection("Sentinel"))`
-  - Replace the raw `builder.Configuration["Sentinel:TargetProcessName"]` string lookup with `IOptions<SentinelOptions>` resolved from the service provider
-
-- [x] **Step 4 — `Agent/Worker.cs`**
-  - Replace the hardcoded `TimeSpan.FromSeconds(5)` delay with `IOptionsMonitor<SentinelOptions>` so changes survive without a restart (hot-reload friendly)
-  - Add a `Log.PollingIntervalUsed` log message at startup showing the active interval
-
-- [x] **Step 5 — `dotnet build`**
-  - 0 warnings, 0 errors
+- [x] **Step 3 — `dotnet build`**
+  - 0 warnings, 0 errors ✅
 
 ---
 
 ## Acceptance Criteria (DoD from PRD)
 
-- `SentinelOptions` lives in `Contracts` — no logic, no Data Annotations
-- `appsettings.json` contains the full `Sentinel` block
-- Setting `Sentinel__PollingIntervalSeconds=2` as an environment variable overrides the json value
-- `dotnet build` — 0 warnings, 0 errors
+- Exception in polling loop does not crash the host process ✅
+- After 3 consecutive failures: `CircuitBreakerOpen` logged + worker sleeps 10 minutes ✅
+- `dotnet build` — 0 warnings, 0 errors ✅

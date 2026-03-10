@@ -10,4 +10,10 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Warning, "Unobserved task exception")]
     public static partial void UnobservedTaskException(ILogger logger, Exception ex);
+
+    [LoggerMessage(LogLevel.Warning, "Watchdog failure #{FailureCount}")]
+    public static partial void WatchdogFailure(ILogger logger, Exception ex, int failureCount);
+
+    [LoggerMessage(LogLevel.Critical, "Circuit breaker open. Sleeping for {Duration}")]
+    public static partial void CircuitBreakerOpen(ILogger logger, TimeSpan duration);
 }

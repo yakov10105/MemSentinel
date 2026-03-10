@@ -4,7 +4,8 @@
       "Bash(dotnet new:*)",
       "Bash(dotnet sln:*)",
       "Bash(/c/Users/Me/Desktop/MemSentinel/.dockerignore:*)",
-      "Bash(/c/Users/Me/Desktop/MemSentinel/README.md:*)"
+      "Bash(/c/Users/Me/Desktop/MemSentinel/README.md:*)",
+      "Bash(dotnet add:*)"
     ]
   }
 }

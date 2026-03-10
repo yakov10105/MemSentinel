@@ -162,18 +162,18 @@ Action: Set up structured logging. When a leak happens, logs must be searchable.
 
 **Sub-tasks:**
 
-- [ ] Integrate Serilog with the Console sink (formatted as JSON for OpenShift/Splunk/ELK).
-- [ ] Include "Enrichers" to automatically add `PodName` and `Namespace` to every log line.
-      **DoD:** Logs output in valid JSON format to the console.
+- [x] Integrate Serilog with the Console sink (formatted as JSON for OpenShift/Splunk/ELK).
+- [x] Include "Enrichers" to automatically add `PodName` and `Namespace` to every log line.
+      **DoD:** Logs output in valid JSON format to the console. ✅ Done
 
 **Task 0.5: Global Exception Handling & "Self-Preservation"**
 Action: The Sidecar must never take down the Pod if it fails.
 
 **Sub-tasks:**
 
-- [ ] Implement a global `UnobservedTaskException` handler.
-- [ ] Create a "Circuit Breaker": If the Agent fails to attach to the API 3 times, it enters a "Sleep" state for 10 minutes to avoid CPU spiking.
-      **DoD:** Throwing an exception in a background thread does not crash the main process.
+- [x] Implement a global `UnobservedTaskException` handler.
+- [x] Create a "Circuit Breaker": If the Agent fails to attach to the API 3 times, it enters a "Sleep" state for 10 minutes to avoid CPU spiking.
+      **DoD:** Throwing an exception in a background thread does not crash the main process. ✅ Done
 
 **Task 0.6: Next.js + TypeScript Scaffolding (The Dashboard Base)**
 Action: Initialize the frontend with strict typing.
