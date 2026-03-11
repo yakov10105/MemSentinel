@@ -1,66 +1,78 @@
-# Current Task: 0.7 — Docker & OpenShift + Kubernetes "Manifest Zero"
+# Current Task: 1.1 — Shared Volume Architecture Implementation
 
-**PRD Reference:** Phase 0, Task 0.7
-**Goal:** Multi-stage Dockerfile targeting < 150MB + complete K8s/OpenShift manifests for the sidecar pattern with SYS_PTRACE.
-**Layer(s) touched:** New files only — no source changes
+**PRD Reference:** Phase 1, Task 1.1
+**Goal:** The YAML manifest (EmptyDir at `/tmp`, `shareProcessNamespace: true`) was completed in Task 0.7. This task adds the **code-side verification**: an `IDiagnosticPortLocator` that confirms the .NET runtime has created `dotnet-diagnostic-*.sock` in the shared volume, exposed via a `/ready` endpoint and a startup log.
 
----
-
-## Files Created
-
-| File | Purpose |
-|---|---|
-| `Dockerfile` | Multi-stage: sdk:10.0 build → aspnet:10.0-alpine runtime; non-root `sentinel` user |
-| `deploy/k8s/serviceaccount.yaml` | `Namespace: memsentinel` + `ServiceAccount: memsentinel` |
-| `deploy/k8s/role.yaml` | `Role: memsentinel-role` — get/list pods |
-| `deploy/k8s/rolebinding.yaml` | Binds SA to Role |
-| `deploy/k8s/deployment.yaml` | Full sidecar `Deployment` + `Service`; `shareProcessNamespace: true`, `SYS_PTRACE`, Downward API, health probes, resource limits |
-| `deploy/openshift/scc.yaml` | Custom `SecurityContextConstraints` — grants `SYS_PTRACE` to the SA; `spc_t` SELinux type for cross-process /proc |
+**Layers touched:** `MemSentinel.Core` (new interface + implementations), `MemSentinel.Agent` (DI wiring, Minimal API `/ready` endpoint, Log messages, Worker startup check)
 
 ---
-
-## Steps
-
-- [x] **Step 1 — `Dockerfile`**
-  - Stage 1: restore by csproj layer (cache-efficient), then publish framework-dependent to `/publish`
-  - Stage 2: alpine runtime, non-root user `sentinel`, `EXPOSE 5000`
-
-- [x] **Step 2 — `serviceaccount.yaml`** — Namespace + SA in one file
-
-- [x] **Step 3 — `role.yaml`** — minimal RBAC (get/list pods)
-
-- [x] **Step 4 — `rolebinding.yaml`**
-
-- [x] **Step 5 — `deployment.yaml`**
-  - `shareProcessNamespace: true`
-  - `emptyDir` volume at `/tmp` for UDS socket
-  - MemSentinel: `SYS_PTRACE`, drop ALL other caps, 100Mi/150m limits, Downward API env, liveness + readiness probes
-  - Target API: clearly marked placeholder stub
-
-- [x] **Step 6 — `deploy/openshift/scc.yaml`**
-  - Custom SCC, `MustRunAsNonRoot`, `spc_t` SELinux, only `SYS_PTRACE` allowed
-  - Inline instructions for `oc apply` + K8s vs OpenShift explanation
-
-- [x] **`dotnet build`** — 0 warnings, 0 errors ✅
-
----
-
-## Deployment Usage
-
-```bash
-# Kubernetes
-kubectl apply -f deploy/k8s/
-
-# OpenShift (apply k8s manifests first, then the SCC as cluster-admin)
-oc apply -f deploy/k8s/
-oc apply -f deploy/openshift/scc.yaml
-```
 
 ## Acceptance Criteria (DoD from PRD)
 
-- Dockerfile uses sdk:10.0 build → aspnet:10.0-alpine runtime ✅
-- Alpine base (~20MB) + framework-dependent publish → well under 150MB ✅
-- `ServiceAccount` + `RoleBinding` defined for `SYS_PTRACE` ✅
-- K8s manifests apply cleanly with `kubectl apply -f deploy/k8s/` ✅
-- OpenShift SCC grants `SYS_PTRACE` via `oc apply -f deploy/openshift/scc.yaml` ✅
-- `dotnet build` — 0 warnings, 0 errors ✅
+- [ ] The shared volume (`emptyDir` at `/tmp`) is mounted for both containers — **already done in Task 0.7** ✅
+- [x] Agent code can locate the `dotnet-diagnostic-*.sock` file in `/tmp`
+- [x] A "Connection Successful" log is generated upon Pod startup when the socket is found
+- [x] `/ready` endpoint returns `200` when socket is found, `503` when not yet available
+- [x] `dotnet build` — 0 warnings, 0 errors ✅
+
+---
+
+## Implementation Steps
+
+- [x] **Step 1 — `IDiagnosticPortLocator` interface (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/IDiagnosticPortLocator.cs`
+  - Method: `ValueTask<string?> TryFindSocketPathAsync(CancellationToken ct)`
+  - Returns the full socket path if found, `null` otherwise
+  - `bool IsSupported { get; }` — false on Windows (mock mode guard)
+
+- [x] **Step 2 — `UnixDiagnosticPortLocator` (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/UnixDiagnosticPortLocator.cs`
+  - Scans `/tmp/dotnet-diagnostic-*.sock` using `Directory.GetFiles("/tmp", "dotnet-diagnostic-*.sock")`
+  - Returns the first match, or `null` if none found
+  - `IsSupported` returns `OperatingSystem.IsLinux()`
+
+- [x] **Step 3 — `MockDiagnosticPortLocator` (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/MockDiagnosticPortLocator.cs`
+  - Always returns a fake path: `/tmp/dotnet-diagnostic-mock-12345.sock`
+  - `IsSupported` returns `true` (allows full pipeline on Windows dev machines)
+
+- [x] **Step 4 — DI registration (Agent/Infrastructure/CoreExtensions.cs)**
+  - Register `IDiagnosticPortLocator` alongside `IMemoryProvider`
+  - `UnixDiagnosticPortLocator` on Linux, `MockDiagnosticPortLocator` on Windows
+
+- [x] **Step 5 — LoggerMessage entries (Agent/Logging/Log.cs)**
+  - `DiagnosticPortFound(ILogger, string socketPath)` — LogLevel.Information
+  - `DiagnosticPortNotFound(ILogger)` — LogLevel.Warning
+
+- [x] **Step 6 — Startup check in `Worker.cs`**
+  - Inject `IDiagnosticPortLocator`
+  - On first successful `ExecuteAsync` iteration, call `TryFindSocketPathAsync`
+  - Log `DiagnosticPortFound` or `DiagnosticPortNotFound`
+  - Store socket path in a field for use by future tasks (Task 1.3)
+
+- [x] **Step 7 — `/ready` endpoint in `Program.cs`**
+  - Add `app.MapGet("/ready", ...)` handler
+  - Resolves `IDiagnosticPortLocator` from DI, calls `TryFindSocketPathAsync`
+  - Returns `200 { status: "ready", socketPath: "..." }` when found
+  - Returns `503 { status: "not_ready", reason: "diagnostic_port_not_found" }` when not
+
+- [x] **Step 8 — Update `deployment.yaml` readiness probe** (optional, non-breaking)
+  - Change readinessProbe path from `/health` → `/ready` so K8s gates traffic on actual socket availability
+
+- [x] **Step 9 — `dotnet build`**
+  - Run build, confirm 0 warnings, 0 errors ✅
+
+---
+
+## Files Created / Modified
+
+| File | Action |
+|---|---|
+| `src/MemSentinel.Core/Collectors/IDiagnosticPortLocator.cs` | Create |
+| `src/MemSentinel.Core/Collectors/UnixDiagnosticPortLocator.cs` | Create |
+| `src/MemSentinel.Core/Collectors/MockDiagnosticPortLocator.cs` | Create |
+| `src/MemSentinel.Agent/Infrastructure/CoreExtensions.cs` | Modify — add DI registration |
+| `src/MemSentinel.Agent/Logging/Log.cs` | Modify — add 2 LoggerMessage methods |
+| `src/MemSentinel.Agent/Worker.cs` | Modify — inject locator, startup check |
+| `src/MemSentinel.Agent/Program.cs` | Modify — add `/ready` endpoint |
+| `deploy/k8s/deployment.yaml` | Modify — readiness probe path (Step 8) |

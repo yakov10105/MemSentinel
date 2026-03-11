@@ -1,4 +1,5 @@
 using MemSentinel.Contracts.Options;
+using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 
@@ -24,6 +25,11 @@ internal static class CoreExtensions
 
             return new MockMemoryProvider();
         });
+
+        services.AddSingleton<IDiagnosticPortLocator>(
+            OperatingSystem.IsLinux()
+                ? new UnixDiagnosticPortLocator()
+                : new MockDiagnosticPortLocator());
 
         return services;
     }

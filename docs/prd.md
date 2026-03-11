@@ -205,9 +205,9 @@ Action: Create the multi-stage Dockerfile and the base YAML.
 
 The goal of this phase is to establish the "handshake" between the Sidecar and the Target API in a Kubernetes/OpenShift environment.
 
-- [ ] **Task 1.1: Shared Volume Architecture Implementation**
-- [ ] Configure the Helm chart/Deployment YAML to mount an `EmptyDir` volume at `/tmp` for both containers.
-- [ ] **Sub-task:** Verify that the .NET runtime successfully creates the `dotnet-diagnostic-*.sock` file in the shared directory.
+- [x] **Task 1.1: Shared Volume Architecture Implementation** ✅ Done
+- [x] Configure the Helm chart/Deployment YAML to mount an `EmptyDir` volume at `/tmp` for both containers.
+- [x] **Sub-task:** Verify that the .NET runtime successfully creates the `dotnet-diagnostic-*.sock` file in the shared directory.
 - [ ] **Task 1.2: Process Namespace Integration**
 - [ ] Implement and test the `shareProcessNamespace: true` flag in the Pod spec.
 - [ ] **Sub-task:** Create a "Health Check" in the Agent that runs `Process.GetProcesses()` to confirm it can see the API's PID (usually PID 1 or close to it).

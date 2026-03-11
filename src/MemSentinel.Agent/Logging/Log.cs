@@ -16,4 +16,10 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Critical, "Circuit breaker open. Sleeping for {Duration}")]
     public static partial void CircuitBreakerOpen(ILogger logger, TimeSpan duration);
+
+    [LoggerMessage(LogLevel.Information, "Diagnostic port found. SocketPath={SocketPath}")]
+    public static partial void DiagnosticPortFound(ILogger logger, string socketPath);
+
+    [LoggerMessage(LogLevel.Warning, "Diagnostic port not found. The target process may not have started yet or the shared volume is not mounted.")]
+    public static partial void DiagnosticPortNotFound(ILogger logger);
 }

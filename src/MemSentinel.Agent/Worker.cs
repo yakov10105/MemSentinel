@@ -1,5 +1,6 @@
 using MemSentinel.Agent.Logging;
 using MemSentinel.Contracts.Options;
+using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 
@@ -7,16 +8,26 @@ namespace MemSentinel.Agent;
 
 public sealed class Worker(
     IMemoryProvider memoryProvider,
+    IDiagnosticPortLocator diagnosticPortLocator,
     IOptionsMonitor<SentinelOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
     private const int CircuitBreakerThreshold = 3;
     private static readonly TimeSpan CircuitBreakerSleep = TimeSpan.FromMinutes(10);
 
+    internal string? SocketPath { get; private set; }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var opts = options.CurrentValue;
         Log.AgentStarting(logger, opts.PollingIntervalSeconds, opts.StorageProvider);
+
+        SocketPath = await diagnosticPortLocator.TryFindSocketPathAsync(stoppingToken);
+
+        if (SocketPath is not null)
+            Log.DiagnosticPortFound(logger, SocketPath);
+        else
+            Log.DiagnosticPortNotFound(logger);
 
         int consecutiveFailures = 0;
 
