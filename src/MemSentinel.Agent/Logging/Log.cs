@@ -22,4 +22,16 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Warning, "Diagnostic port not found. The target process may not have started yet or the shared volume is not mounted.")]
     public static partial void DiagnosticPortNotFound(ILogger logger);
+
+    [LoggerMessage(LogLevel.Information, "Target process visible. ProcessName={ProcessName} PID={Pid}")]
+    public static partial void TargetProcessFound(ILogger logger, string processName, int pid);
+
+    [LoggerMessage(LogLevel.Warning, "Target process not visible. ProcessName={ProcessName} — shareProcessNamespace may not be active or the process has not started.")]
+    public static partial void TargetProcessNotFound(ILogger logger, string processName);
+
+    [LoggerMessage(LogLevel.Information, "Diagnostic client connected. PID={Pid} RuntimeVersion={RuntimeVersion}")]
+    public static partial void DiagnosticClientConnected(ILogger logger, int pid, string runtimeVersion);
+
+    [LoggerMessage(LogLevel.Warning, "Diagnostic client ping failed. ErrorCode={ErrorCode}")]
+    public static partial void DiagnosticClientFailed(ILogger logger, Exception ex, string errorCode);
 }
