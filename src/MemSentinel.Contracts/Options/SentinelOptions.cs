@@ -14,5 +14,6 @@ public sealed class SentinelOptions
     public int PollingIntervalSeconds { get; init; } = 5;
     public int CoolingPeriodMinutes { get; init; } = 3;
     public string StorageProvider { get; init; } = "Local";
+    public int MetricsWindowMinutes { get; init; } = 60;
     public ThresholdOptions Thresholds { get; init; } = new();
 }

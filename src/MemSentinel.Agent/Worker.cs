@@ -1,5 +1,6 @@
 using MemSentinel.Agent.Logging;
 using MemSentinel.Contracts.Options;
+using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,7 @@ public sealed class Worker(
     IDiagnosticPortLocator diagnosticPortLocator,
     IProcessLocator processLocator,
     IDotNetDiagnosticClient diagnosticClient,
+    MetricsBuffer metricsBuffer,
     IOptionsMonitor<SentinelOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
@@ -86,11 +88,25 @@ public sealed class Worker(
     private async Task DoWorkAsync(CancellationToken stoppingToken)
     {
         var reading = await memoryProvider.GetRssMemoryAsync(stoppingToken);
+        var heap = await memoryProvider.GetHeapMetadataAsync(stoppingToken);
 
         Log.MemoryReading(
             logger,
             rssMb: reading.RssBytes / 1_048_576.0,
             pssMb: reading.PssBytes / 1_048_576.0,
             vmSizeMb: reading.VmSizeBytes / 1_048_576.0);
+
+        await metricsBuffer.AddAsync(new MetricSample(reading, heap), stoppingToken);
+
+        var snapshot = await metricsBuffer.GetSnapshotAsync(stoppingToken);
+        var velocity = MemoryGrowthAnalyzer.Calculate(snapshot);
+
+        if (velocity.SampleCount >= 2)
+        {
+            Log.GrowthVelocity(logger, velocity.RssMbPerMinute, velocity.ManagedLeakMbPerMinute, velocity.SampleCount);
+
+            if (velocity.IsLeakSuspected)
+                Log.LeakSuspected(logger, velocity.RssMbPerMinute, velocity.ManagedLeakMbPerMinute);
+        }
     }
 }

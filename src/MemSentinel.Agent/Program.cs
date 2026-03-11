@@ -2,6 +2,7 @@ using Log = MemSentinel.Agent.Logging.Log;
 using MemSentinel.Agent;
 using MemSentinel.Agent.Infrastructure;
 using MemSentinel.Contracts.Options;
+using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
@@ -68,6 +69,20 @@ app.MapGet("/metrics", async (IMemoryProvider memoryProvider, CancellationToken 
         pssBytes = reading.PssBytes,
         vmSizeBytes = reading.VmSizeBytes,
         capturedAt = reading.CapturedAt
+    });
+});
+
+app.MapGet("/metrics/velocity", async (MetricsBuffer buffer, CancellationToken ct) =>
+{
+    var snapshot = await buffer.GetSnapshotAsync(ct);
+    var velocity = MemoryGrowthAnalyzer.Calculate(snapshot);
+    return Results.Ok(new
+    {
+        rssMbPerMinute = velocity.RssMbPerMinute,
+        managedLeakMbPerMinute = velocity.ManagedLeakMbPerMinute,
+        windowDuration = velocity.WindowDuration,
+        sampleCount = velocity.SampleCount,
+        isLeakSuspected = velocity.IsLeakSuspected
     });
 });
 

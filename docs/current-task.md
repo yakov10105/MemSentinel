@@ -1,25 +1,48 @@
-# Task 1.4 — Linux /proc Parser (Unmanaged Memory)
+# Task 2.1 — Sliding Window Metrics Engine
 
-**PRD Reference:** Phase 1, Task 1.4
-**Branch:** `task/1.4-proc-parser` (cut from `phase/1-plumbing`)
-**Layers touched:** `MemSentinel.Core` (extract parser, add InternalsVisibleTo), `MemSentinel.UnitTests` (new tests), `MemSentinel.Agent` (new endpoint)
-
----
-
-## What Already Exists (Phase 0)
-`LinuxMemoryProvider` already reads:
-- `/proc/[pid]/status` → VmRSS, VmSize
-- `/proc/[pid]/smaps_rollup` → Pss
-- Algorithm: `ArrayPool<byte>` + `Utf8Parser` + `ReadOnlySpan<byte>` line scanning
-
-**Gap:** parser logic is `private static` — untestable without real `/proc` files. No tests exist. No endpoint to confirm readings in-cluster.
+**PRD Reference:** Phase 2, Task 2.1
+**Branch:** `task/2.1-sliding-window` (cut from `phase/2-watchdog`)
+**Layers touched:** `MemSentinel.Contracts` (new option), `MemSentinel.Core` (new Analysis/ folder), `MemSentinel.Agent` (DI, Worker, endpoint, logs)
 
 ---
 
-## Acceptance Criteria (PRD Phase 1 DoD)
-- [ ] Sidecar can read the API's RSS memory from the Linux kernel
-- [ ] `GET /metrics` returns `{ rssBytes, pssBytes, vmSizeBytes, capturedAt }` with HTTP 200
-- [ ] Unit tests cover the parser with synthetic `/proc` content
+## What This Task Builds
+
+A time-series buffer + growth velocity calculator that the Watchdog uses to decide
+whether memory is leaking. Task 2.2 (triggers) consumes the output of this task.
+
+**Data flow:**
+```
+Worker.DoWorkAsync()
+  → GetRssMemoryAsync + GetHeapMetadataAsync
+  → MetricsBuffer.AddAsync(MetricSample)
+  → MemoryGrowthAnalyzer.Calculate(snapshot)
+  → GrowthVelocity { RssMbPerMinute, ManagedLeakMbPerMinute, IsLeakSuspected }
+  → Log.GrowthVelocity / Log.LeakSuspected
+```
+
+## Key Design Decisions
+
+- **`MetricSample`** — pairs `RssMemoryReading` + `HeapMetadata` for one tick.
+- **`MetricsBuffer`** — thread-safe `Queue<MetricSample>` with time-window pruning.
+  Guarded by `SemaphoreSlim(1,1)`. Prunes entries older than `MetricsWindowMinutes`
+  on every `AddAsync` call. Returns snapshot copies — callers never get live references.
+- **`MemoryGrowthAnalyzer`** — `static` class, pure math, no state, no DI.
+  Velocity = `(newest - oldest) / windowMinutes`. Leak suspected when
+  Gen2 + LOH byte delta is positive (growing tenured heap = not GC pressure).
+- **`GrowthVelocity`** — `readonly record struct` result with `Insufficient` sentinel
+  for when < 2 samples are available.
+- **Window duration is configurable** via new `MetricsWindowMinutes` option (default: 60).
+  Passed as `TimeSpan` constructor param to `MetricsBuffer` (keeps Core free of Options).
+
+## Acceptance Criteria
+
+- [ ] Each poll tick records both RSS and heap metadata into the buffer
+- [ ] Buffer prunes entries older than the configured window
+- [ ] Velocity is calculated and logged every tick (once ≥ 2 samples)
+- [ ] `IsLeakSuspected = true` when Gen2 + LOH byte delta > 0
+- [ ] `GET /metrics/velocity` returns current velocity as JSON
+- [ ] Unit tests cover: velocity math, Insufficient sentinel, pruning, leak detection logic
 - [ ] `dotnet build` — 0 warnings, 0 errors
 - [ ] `dotnet test` — all passing
 
@@ -27,35 +50,52 @@
 
 ## Steps
 
-- [x] **Step 1 — Extract `ProcFileParser` (Core/Collectors)**
-  - Create `src/MemSentinel.Core/Collectors/ProcFileParser.cs`
-  - `internal static class ProcFileParser`
-  - Move `ParseField(ReadOnlySpan<byte>, ReadOnlySpan<byte>)` and `SkipWhitespace(ReadOnlySpan<byte>)` from `LinuxMemoryProvider`
+- [ ] **Step 1 — `MetricsWindowMinutes` option (Contracts/Options)**
+  - Add `int MetricsWindowMinutes { get; init; } = 60` to `SentinelOptions`
 
-- [x] **Step 2 — Update `LinuxMemoryProvider` (Core/Providers)**
-  - Remove the two private static methods
-  - Call `ProcFileParser.ParseField(...)` instead
-  - No behaviour change — pure refactor
+- [ ] **Step 2 — `MetricSample` (Core/Analysis)**
+  - `readonly record struct MetricSample(RssMemoryReading Rss, HeapMetadata Heap)`
 
-- [x] **Step 3 — Add `InternalsVisibleTo` to `MemSentinel.Core.csproj`**
-  - Allows test project to access `internal ProcFileParser`
+- [ ] **Step 3 — `GrowthVelocity` (Core/Analysis)**
+  - `readonly record struct GrowthVelocity(double RssMbPerMinute, double ManagedLeakMbPerMinute, TimeSpan WindowDuration, int SampleCount, bool IsLeakSuspected)`
+  - Static `Insufficient` sentinel for < 2 samples
 
-- [x] **Step 4 — Write unit tests (UnitTests/Collectors/ProcFileParserTests.cs)**
-  - Parses VmRSS from realistic `/proc/[pid]/status` bytes
-  - Parses Pss from realistic `/proc/[pid]/smaps_rollup` bytes
-  - Returns 0 when field not found
-  - Returns 0 when line is malformed (no numeric value)
-  - Handles large values (multi-GB — fits in `long`)
-  - Handles field at end of buffer (no trailing newline)
+- [ ] **Step 4 — `MetricsBuffer` (Core/Analysis)**
+  - `sealed class MetricsBuffer(TimeSpan window)`
+  - Internal `Queue<MetricSample>` + `SemaphoreSlim(1,1)`
+  - `ValueTask AddAsync(MetricSample, CancellationToken)` — enqueue + prune old entries
+  - `ValueTask<IReadOnlyList<MetricSample>> GetSnapshotAsync(CancellationToken)` — returns copy
 
-- [x] **Step 5 — Add `GET /metrics` endpoint (Agent/Program.cs)**
-  - Calls `IMemoryProvider.GetRssMemoryAsync()`
-  - Returns `200 { rssBytes, pssBytes, vmSizeBytes, capturedAt }`
+- [ ] **Step 5 — `MemoryGrowthAnalyzer` (Core/Analysis)**
+  - `static class MemoryGrowthAnalyzer`
+  - `GrowthVelocity Calculate(IReadOnlyList<MetricSample> samples)`
+  - Velocity = RSS delta / window minutes
+  - `IsLeakSuspected` = Gen2Delta + LohDelta > 0
 
-- [x] **Step 6 — Build, test, and update PRD**
-  - `dotnet build` → 0 warnings, 0 errors ✅
-  - `dotnet test` → 6/6 passed ✅
-  - Update `docs/prd.md` Task 1.4 → ✅ Done
+- [ ] **Step 6 — Register `MetricsBuffer` (Agent/Infrastructure/CoreExtensions)**
+  - `services.AddSingleton<MetricsBuffer>(sp => new MetricsBuffer(TimeSpan.FromMinutes(opts.MetricsWindowMinutes)))`
+
+- [ ] **Step 7 — Update `Worker.DoWorkAsync` (Agent)**
+  - Call both `GetRssMemoryAsync` and `GetHeapMetadataAsync`
+  - Push `MetricSample` to `MetricsBuffer`
+  - Get snapshot → `MemoryGrowthAnalyzer.Calculate` → log velocity
+
+- [ ] **Step 8 — Log messages (Agent/Logging/Log.cs)**
+  - `GrowthVelocity(ILogger, double rssMbPerMin, double managedLeakMbPerMin, int sampleCount)`
+  - `LeakSuspected(ILogger, double rssMbPerMin, double managedLeakMbPerMin)` — LogLevel.Warning
+
+- [ ] **Step 9 — `GET /metrics/velocity` endpoint (Agent/Program.cs)**
+  - Resolves `MetricsBuffer`, gets snapshot, calls analyzer
+  - Returns `{ rssMbPerMinute, managedLeakMbPerMinute, windowDuration, sampleCount, isLeakSuspected }`
+
+- [ ] **Step 10 — Unit tests (UnitTests/Analysis/)**
+  - `MemoryGrowthAnalyzerTests`: velocity math, Insufficient on < 2, leak suspected on Gen2 growth, not suspected on Gen0-only
+  - `MetricsBufferTests`: pruning removes old entries, snapshot is a copy not live ref
+
+- [ ] **Step 11 — Build, test, update PRD**
+  - `dotnet build` → 0 warnings, 0 errors
+  - `dotnet test` → all passing
+  - Update `docs/prd.md` Task 2.1 → ✅ Done
 
 ---
 
@@ -63,9 +103,15 @@
 
 | File | Action |
 |---|---|
-| `src/MemSentinel.Core/Collectors/ProcFileParser.cs` | Create |
-| `src/MemSentinel.Core/Providers/LinuxMemoryProvider.cs` | Modify — use ProcFileParser |
-| `src/MemSentinel.Core/MemSentinel.Core.csproj` | Modify — InternalsVisibleTo |
-| `tests/MemSentinel.UnitTests/Collectors/ProcFileParserTests.cs` | Create |
-| `src/MemSentinel.Agent/Program.cs` | Modify — add /metrics endpoint |
-| `docs/prd.md` | Modify — Task 1.4 ✅ Done |
+| `src/MemSentinel.Contracts/Options/SentinelOptions.cs` | Modify — add MetricsWindowMinutes |
+| `src/MemSentinel.Core/Analysis/MetricSample.cs` | Create |
+| `src/MemSentinel.Core/Analysis/GrowthVelocity.cs` | Create |
+| `src/MemSentinel.Core/Analysis/MetricsBuffer.cs` | Create |
+| `src/MemSentinel.Core/Analysis/MemoryGrowthAnalyzer.cs` | Create |
+| `src/MemSentinel.Agent/Infrastructure/CoreExtensions.cs` | Modify — register MetricsBuffer |
+| `src/MemSentinel.Agent/Worker.cs` | Modify — use buffer + analyzer |
+| `src/MemSentinel.Agent/Logging/Log.cs` | Modify — 2 new log methods |
+| `src/MemSentinel.Agent/Program.cs` | Modify — /metrics/velocity endpoint |
+| `tests/MemSentinel.UnitTests/Analysis/MemoryGrowthAnalyzerTests.cs` | Create |
+| `tests/MemSentinel.UnitTests/Analysis/MetricsBufferTests.cs` | Create |
+| `docs/prd.md` | Modify — Task 2.1 ✅ Done |
