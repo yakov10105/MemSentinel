@@ -1,4 +1,5 @@
 using MemSentinel.Contracts.Options;
+using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
@@ -43,6 +44,12 @@ internal static class CoreExtensions
             }
 
             return new MockMemoryProvider();
+        });
+
+        services.AddSingleton<MetricsBuffer>(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
+            return new MetricsBuffer(TimeSpan.FromMinutes(opts.MetricsWindowMinutes));
         });
 
         return services;

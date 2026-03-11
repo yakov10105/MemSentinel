@@ -34,4 +34,10 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Warning, "Diagnostic client ping failed. ErrorCode={ErrorCode}")]
     public static partial void DiagnosticClientFailed(ILogger logger, Exception ex, string errorCode);
+
+    [LoggerMessage(LogLevel.Information, "Growth velocity: RssMbPerMin={RssMbPerMinute:F3} ManagedLeakMbPerMin={ManagedLeakMbPerMinute:F3} Samples={SampleCount}")]
+    public static partial void GrowthVelocity(ILogger logger, double rssMbPerMinute, double managedLeakMbPerMinute, int sampleCount);
+
+    [LoggerMessage(LogLevel.Warning, "Leak suspected: RssMbPerMin={RssMbPerMinute:F3} ManagedLeakMbPerMin={ManagedLeakMbPerMinute:F3}")]
+    public static partial void LeakSuspected(ILogger logger, double rssMbPerMinute, double managedLeakMbPerMinute);
 }
