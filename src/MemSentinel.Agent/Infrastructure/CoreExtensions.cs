@@ -19,6 +19,16 @@ internal static class CoreExtensions
                 ? new UnixDiagnosticPortLocator()
                 : new MockDiagnosticPortLocator());
 
+        if (OperatingSystem.IsLinux())
+            services.AddSingleton<IDotNetDiagnosticClient>(sp =>
+            {
+                var processName = sp.GetRequiredService<IOptions<SentinelOptions>>().Value.TargetProcessName;
+                var locator = sp.GetRequiredService<IProcessLocator>();
+                return new DotNetDiagnosticClient(locator, processName);
+            });
+        else
+            services.AddSingleton<IDotNetDiagnosticClient, MockDotNetDiagnosticClient>();
+
         services.AddSingleton<IMemoryProvider>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;

@@ -3,6 +3,7 @@ using MemSentinel.Agent;
 using MemSentinel.Agent.Infrastructure;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Collectors;
+using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -48,6 +49,26 @@ app.MapGet("/health/processes", async (IProcessLocator locator, IOptions<Sentine
     return info is { } proc
         ? Results.Ok(new { status = "visible", pid = proc.Pid, processName = proc.ProcessName })
         : Results.Json(new { status = "not_visible", reason = "target_process_not_found", processName }, statusCode: 503);
+});
+
+app.MapGet("/health/diagnostic-port", async (IDotNetDiagnosticClient client, CancellationToken ct) =>
+{
+    var result = await client.PingAsync(ct);
+    return result.IsSuccess && result.Value is { } conn
+        ? Results.Ok(new { status = "connected", pid = conn.Pid, runtimeVersion = conn.RuntimeVersion, commandLine = conn.CommandLine })
+        : Results.Json(new { status = "failed", errorCode = result.Error?.Code, message = result.Error?.Message }, statusCode: 503);
+});
+
+app.MapGet("/metrics", async (IMemoryProvider memoryProvider, CancellationToken ct) =>
+{
+    var reading = await memoryProvider.GetRssMemoryAsync(ct);
+    return Results.Ok(new
+    {
+        rssBytes = reading.RssBytes,
+        pssBytes = reading.PssBytes,
+        vmSizeBytes = reading.VmSizeBytes,
+        capturedAt = reading.CapturedAt
+    });
 });
 
 app.Run();
