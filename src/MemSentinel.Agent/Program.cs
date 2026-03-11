@@ -3,6 +3,7 @@ using MemSentinel.Agent;
 using MemSentinel.Agent.Infrastructure;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Collectors;
+using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Formatting.Compact;
 
@@ -38,6 +39,15 @@ app.MapGet("/ready", async (IDiagnosticPortLocator locator, CancellationToken ct
     return socketPath is not null
         ? Results.Ok(new { status = "ready", socketPath })
         : Results.Json(new { status = "not_ready", reason = "diagnostic_port_not_found" }, statusCode: 503);
+});
+
+app.MapGet("/health/processes", async (IProcessLocator locator, IOptions<SentinelOptions> opts, CancellationToken ct) =>
+{
+    var processName = opts.Value.TargetProcessName;
+    var info = await locator.FindTargetAsync(processName, ct);
+    return info is { } proc
+        ? Results.Ok(new { status = "visible", pid = proc.Pid, processName = proc.ProcessName })
+        : Results.Json(new { status = "not_visible", reason = "target_process_not_found", processName }, statusCode: 503);
 });
 
 app.Run();

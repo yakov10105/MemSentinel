@@ -9,27 +9,31 @@ internal static class CoreExtensions
 {
     internal static IServiceCollection AddMemoryProvider(this IServiceCollection services)
     {
+        services.AddSingleton<IProcessLocator>(
+            OperatingSystem.IsLinux()
+                ? new SystemProcessLocator()
+                : new MockProcessLocator());
+
+        services.AddSingleton<IDiagnosticPortLocator>(
+            OperatingSystem.IsLinux()
+                ? new UnixDiagnosticPortLocator()
+                : new MockDiagnosticPortLocator());
+
         services.AddSingleton<IMemoryProvider>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
 
             if (OperatingSystem.IsLinux())
             {
-                var target = System.Diagnostics.Process
-                    .GetProcessesByName(options.TargetProcessName)
-                    .FirstOrDefault();
-
-                var pid = target?.Id ?? System.Diagnostics.Process.GetCurrentProcess().Id;
+                var locator = sp.GetRequiredService<IProcessLocator>();
+                var info = locator.FindTargetAsync(options.TargetProcessName, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                var pid = info?.Pid ?? System.Diagnostics.Process.GetCurrentProcess().Id;
                 return new LinuxMemoryProvider(pid);
             }
 
             return new MockMemoryProvider();
         });
-
-        services.AddSingleton<IDiagnosticPortLocator>(
-            OperatingSystem.IsLinux()
-                ? new UnixDiagnosticPortLocator()
-                : new MockDiagnosticPortLocator());
 
         return services;
     }
