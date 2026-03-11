@@ -208,21 +208,21 @@ The goal of this phase is to establish the "handshake" between the Sidecar and t
 - [x] **Task 1.1: Shared Volume Architecture Implementation** ✅ Done
 - [x] Configure the Helm chart/Deployment YAML to mount an `EmptyDir` volume at `/tmp` for both containers.
 - [x] **Sub-task:** Verify that the .NET runtime successfully creates the `dotnet-diagnostic-*.sock` file in the shared directory.
-- [ ] **Task 1.2: Process Namespace Integration**
-- [ ] Implement and test the `shareProcessNamespace: true` flag in the Pod spec.
-- [ ] **Sub-task:** Create a "Health Check" in the Agent that runs `Process.GetProcesses()` to confirm it can see the API's PID (usually PID 1 or close to it).
-- [ ] **Task 1.3: Unix Domain Socket (UDS) Client Wrapper**
-- [ ] Develop the `DotNetDiagnosticClient` using `Microsoft.Diagnostics.NETCore.Client`.
-- [ ] **Sub-task:** Implement a "Ping" mechanism to ensure the sidecar can attach to the API without permission errors (`SYS_PTRACE` capabilities check).
-- [ ] **Task 1.4: Linux /proc Parser (Unmanaged Memory)**
-- [ ] Build a high-performance parser for `/proc/[pid]/status` and `/proc/[pid]/smaps_rollup`.
-- [ ] **Sub-task:** Extract Resident Set Size (RSS), Proportional Set Size (PSS), and Virtual Memory metrics.
+- [x] **Task 1.2: Process Namespace Integration** ✅ Done
+- [x] Implement and test the `shareProcessNamespace: true` flag in the Pod spec.
+- [x] **Sub-task:** Create a "Health Check" in the Agent that runs `Process.GetProcesses()` to confirm it can see the API's PID (usually PID 1 or close to it).
+- [x] **Task 1.3: Unix Domain Socket (UDS) Client Wrapper** ✅ Done
+- [x] Develop the `DotNetDiagnosticClient` using `Microsoft.Diagnostics.NETCore.Client`.
+- [x] **Sub-task:** Implement a "Ping" mechanism to ensure the sidecar can attach to the API without permission errors (`SYS_PTRACE` capabilities check).
+- [x] **Task 1.4: Linux /proc Parser (Unmanaged Memory)** ✅ Done
+- [x] Build a high-performance parser for `/proc/[pid]/status` and `/proc/[pid]/smaps_rollup`.
+- [x] **Sub-task:** Extract Resident Set Size (RSS), Proportional Set Size (PSS), and Virtual Memory metrics.
 
 **Phase 1 DoD:**
 
-- [ ] Sidecar can successfully identify the API's PID.
-- [ ] Sidecar can read the API's RSS memory from the Linux kernel.
-- [ ] A "Connection Successful" log is generated upon Pod startup.
+- [x] Sidecar can successfully identify the API's PID.
+- [x] Sidecar can read the API's RSS memory from the Linux kernel.
+- [x] A "Connection Successful" log is generated upon Pod startup.
 
 ### Phase 2: The "Watchdog" & Trigger Logic (Monitoring)
 

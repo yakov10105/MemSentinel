@@ -22,47 +22,51 @@ Follow the Task Workflow defined in CLAUDE.md exactly:
 
 ---
 
-## Branch Setup (MANDATORY before coding)
+## Branch Setup (AUTOMATIC — runs immediately when user says "go")
 
-After the user approves the plan, the FIRST action before writing any code is to
-create and push the task branch. Follow the branch tree from the git-workflow skill.
+Do NOT wait for further input. The moment the user approves ("go", "approved", "start",
+"yes"), execute the branch setup silently as the first action, then begin coding.
 
-### Step A — Ensure the phase branch exists
+### Step A — Ensure the phase branch exists (run this first)
 
 ```bash
-# Check if the phase branch exists locally or remotely
-git branch -a | grep phase/N-<name>
+git branch -a | grep "phase/N-"
 ```
 
-If it does not exist, create it from main:
+If remote only, check it out:
+```bash
+git checkout --track origin/phase/N-<name>
+```
 
+If it does not exist anywhere, create it from main:
 ```bash
 git checkout main && git pull
 git checkout -b phase/N-<name>
 git push -u origin phase/N-<name>
 ```
 
-If it already exists, pull latest:
-
+If it already exists locally, just pull latest:
 ```bash
 git checkout phase/N-<name>
 git pull origin phase/N-<name>
 ```
 
-### Step B — Create the task branch from the phase branch
+### Step B — Create the task branch from the phase branch (run immediately after A)
 
 ```bash
 git checkout -b task/N.M-<slug>
 git push -u origin task/N.M-<slug>
 ```
 
-Branch naming: `task/N.M-<slug>` where slug is lowercase, hyphen-separated,
-≤ 30 chars. Examples: `task/1.2-process-namespace`, `task/2.1-sliding-window`.
+Branch naming: `task/N.M-<slug>` — lowercase, hyphen-separated, ≤ 30 chars.
+Examples: `task/1.2-process-namespace`, `task/2.1-sliding-window`.
 
-### Step C — Confirm to the user
+### Step C — Announce branch, then start coding immediately
 
-Report the active branch before writing any code:
-> "On branch `task/1.2-process-namespace`. Starting implementation."
+Output a single line like:
+> "Branched: `task/1.2-process-namespace` ← `phase/1-plumbing`. Starting Step 1."
+
+Then begin Step 1 of the implementation plan without any further prompts.
 
 ---
 
@@ -90,4 +94,4 @@ git merge --no-ff task/N.M-<slug> -m "feat(<scope>): merge task/N.M-<slug>"
 git push origin phase/N-<name>
 ```
 
-5. Report the merge to the user and suggest the next task.
+5. Report the merge and branch tree status, then suggest the next task.

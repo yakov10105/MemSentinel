@@ -9,6 +9,8 @@ namespace MemSentinel.Agent;
 public sealed class Worker(
     IMemoryProvider memoryProvider,
     IDiagnosticPortLocator diagnosticPortLocator,
+    IProcessLocator processLocator,
+    IDotNetDiagnosticClient diagnosticClient,
     IOptionsMonitor<SentinelOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
@@ -16,6 +18,8 @@ public sealed class Worker(
     private static readonly TimeSpan CircuitBreakerSleep = TimeSpan.FromMinutes(10);
 
     internal string? SocketPath { get; private set; }
+    internal ProcessInfo? TargetProcess { get; private set; }
+    internal DiagnosticConnectionInfo? ConnectionInfo { get; private set; }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,6 +32,24 @@ public sealed class Worker(
             Log.DiagnosticPortFound(logger, SocketPath);
         else
             Log.DiagnosticPortNotFound(logger);
+
+        TargetProcess = await processLocator.FindTargetAsync(opts.TargetProcessName, stoppingToken);
+
+        if (TargetProcess is { } proc)
+            Log.TargetProcessFound(logger, proc.ProcessName, proc.Pid);
+        else
+            Log.TargetProcessNotFound(logger, opts.TargetProcessName);
+
+        var pingResult = await diagnosticClient.PingAsync(stoppingToken);
+        if (pingResult.IsSuccess && pingResult.Value is { } conn)
+        {
+            ConnectionInfo = conn;
+            Log.DiagnosticClientConnected(logger, conn.Pid, conn.RuntimeVersion);
+        }
+        else if (!pingResult.IsSuccess && pingResult.Error is { } err)
+        {
+            Log.DiagnosticClientFailed(logger, new Exception(err.Message), err.Code);
+        }
 
         int consecutiveFailures = 0;
 
