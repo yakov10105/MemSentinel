@@ -1,63 +1,64 @@
-# Current Task: 1.1 — Shared Volume Architecture Implementation
+# Current Task: 1.2 — Process Namespace Integration
 
-**PRD Reference:** Phase 1, Task 1.1
-**Goal:** The YAML manifest (EmptyDir at `/tmp`, `shareProcessNamespace: true`) was completed in Task 0.7. This task adds the **code-side verification**: an `IDiagnosticPortLocator` that confirms the .NET runtime has created `dotnet-diagnostic-*.sock` in the shared volume, exposed via a `/ready` endpoint and a startup log.
+**PRD Reference:** Phase 1, Task 1.2
+**Goal:** `shareProcessNamespace: true` is already in `deployment.yaml` (Task 0.7). This task adds the code-side verification: an `IProcessLocator` abstraction that discovers the target .NET API's PID via `Process.GetProcesses()`, exposed via a `/health/processes` endpoint and a startup log. Also cleans up the duplicate process-discovery logic in `CoreExtensions.cs`.
 
-**Layers touched:** `MemSentinel.Core` (new interface + implementations), `MemSentinel.Agent` (DI wiring, Minimal API `/ready` endpoint, Log messages, Worker startup check)
+**Branch:** `task/1.2-process-namespace` (cut from `phase/1-plumbing`)
+
+**Layers touched:** `MemSentinel.Core` (new interface + implementations), `MemSentinel.Agent` (DI wiring, endpoint, log messages, Worker startup check)
 
 ---
 
 ## Acceptance Criteria (DoD from PRD)
 
-- [ ] The shared volume (`emptyDir` at `/tmp`) is mounted for both containers — **already done in Task 0.7** ✅
-- [x] Agent code can locate the `dotnet-diagnostic-*.sock` file in `/tmp`
-- [x] A "Connection Successful" log is generated upon Pod startup when the socket is found
-- [x] `/ready` endpoint returns `200` when socket is found, `503` when not yet available
+- [ ] `shareProcessNamespace: true` in Pod spec confirmed working — **already done in 0.7** ✅
+- [x] Sidecar can successfully identify the API's PID via `Process.GetProcesses()`
+- [x] A log is generated on startup reporting whether the target process is visible
+- [x] `/health/processes` endpoint returns PID + process name when visible, 503 when not
 - [x] `dotnet build` — 0 warnings, 0 errors ✅
 
 ---
 
 ## Implementation Steps
 
-- [x] **Step 1 — `IDiagnosticPortLocator` interface (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/IDiagnosticPortLocator.cs`
-  - Method: `ValueTask<string?> TryFindSocketPathAsync(CancellationToken ct)`
-  - Returns the full socket path if found, `null` otherwise
-  - `bool IsSupported { get; }` — false on Windows (mock mode guard)
+- [x] **Step 1 — `ProcessInfo` record (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/ProcessInfo.cs`
+  - `readonly record struct ProcessInfo(int Pid, string ProcessName)`
 
-- [x] **Step 2 — `UnixDiagnosticPortLocator` (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/UnixDiagnosticPortLocator.cs`
-  - Scans `/tmp/dotnet-diagnostic-*.sock` using `Directory.GetFiles("/tmp", "dotnet-diagnostic-*.sock")`
-  - Returns the first match, or `null` if none found
-  - `IsSupported` returns `OperatingSystem.IsLinux()`
+- [x] **Step 2 — `IProcessLocator` interface (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/IProcessLocator.cs`
+  - `bool IsSupported { get; }`
+  - `ValueTask<ProcessInfo?> FindTargetAsync(string processName, CancellationToken ct)`
 
-- [x] **Step 3 — `MockDiagnosticPortLocator` (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/MockDiagnosticPortLocator.cs`
-  - Always returns a fake path: `/tmp/dotnet-diagnostic-mock-12345.sock`
-  - `IsSupported` returns `true` (allows full pipeline on Windows dev machines)
+- [x] **Step 3 — `SystemProcessLocator` (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/SystemProcessLocator.cs`
+  - Uses `Process.GetProcessesByName(processName)` — works on Linux with `shareProcessNamespace`
+  - Returns the first match as `ProcessInfo`, or `null` if none found
+  - `IsSupported` returns `true` (works on both OS; real value only on Linux with shared namespace)
 
-- [x] **Step 4 — DI registration (Agent/Infrastructure/CoreExtensions.cs)**
-  - Register `IDiagnosticPortLocator` alongside `IMemoryProvider`
-  - `UnixDiagnosticPortLocator` on Linux, `MockDiagnosticPortLocator` on Windows
+- [x] **Step 4 — `MockProcessLocator` (Core/Collectors)**
+  - New file: `src/MemSentinel.Core/Collectors/MockProcessLocator.cs`
+  - Always returns `ProcessInfo(Pid: 1, ProcessName: "dotnet")`
+  - `IsSupported` returns `true`
 
-- [x] **Step 5 — LoggerMessage entries (Agent/Logging/Log.cs)**
-  - `DiagnosticPortFound(ILogger, string socketPath)` — LogLevel.Information
-  - `DiagnosticPortNotFound(ILogger)` — LogLevel.Warning
+- [x] **Step 5 — DI registration + refactor (Agent/Infrastructure/CoreExtensions.cs)**
+  - Register `IProcessLocator`: `SystemProcessLocator` on Linux, `MockProcessLocator` on Windows
+  - Refactor `IMemoryProvider` factory to resolve `IProcessLocator` from `sp` instead of duplicating `Process.GetProcessesByName` inline
 
-- [x] **Step 6 — Startup check in `Worker.cs`**
-  - Inject `IDiagnosticPortLocator`
-  - On first successful `ExecuteAsync` iteration, call `TryFindSocketPathAsync`
-  - Log `DiagnosticPortFound` or `DiagnosticPortNotFound`
-  - Store socket path in a field for use by future tasks (Task 1.3)
+- [x] **Step 6 — LoggerMessage entries (Agent/Logging/Log.cs)**
+  - `TargetProcessFound(ILogger, int pid, string processName)` — LogLevel.Information
+  - `TargetProcessNotFound(ILogger, string processName)` — LogLevel.Warning
 
-- [x] **Step 7 — `/ready` endpoint in `Program.cs`**
-  - Add `app.MapGet("/ready", ...)` handler
-  - Resolves `IDiagnosticPortLocator` from DI, calls `TryFindSocketPathAsync`
-  - Returns `200 { status: "ready", socketPath: "..." }` when found
-  - Returns `503 { status: "not_ready", reason: "diagnostic_port_not_found" }` when not
+- [x] **Step 7 — Startup check in `Worker.cs`**
+  - Inject `IProcessLocator` and `SentinelOptions`
+  - After the existing `DiagnosticPortLocator` check: call `FindTargetAsync(opts.TargetProcessName)`
+  - Log `TargetProcessFound` or `TargetProcessNotFound`
+  - Store `ProcessInfo?` in a field for use by future tasks (Task 1.3, 1.4)
 
-- [x] **Step 8 — Update `deployment.yaml` readiness probe** (optional, non-breaking)
-  - Change readinessProbe path from `/health` → `/ready` so K8s gates traffic on actual socket availability
+- [x] **Step 8 — `/health/processes` endpoint (Agent/Program.cs)**
+  - `GET /health/processes` — resolves `IProcessLocator` + `SentinelOptions`
+  - Returns `200 { status: "visible", pid, processName }` when found
+  - Returns `503 { status: "not_visible", reason: "target_process_not_found", processName }` when not
 
 - [x] **Step 9 — `dotnet build`**
   - Run build, confirm 0 warnings, 0 errors ✅
@@ -68,11 +69,11 @@
 
 | File | Action |
 |---|---|
-| `src/MemSentinel.Core/Collectors/IDiagnosticPortLocator.cs` | Create |
-| `src/MemSentinel.Core/Collectors/UnixDiagnosticPortLocator.cs` | Create |
-| `src/MemSentinel.Core/Collectors/MockDiagnosticPortLocator.cs` | Create |
-| `src/MemSentinel.Agent/Infrastructure/CoreExtensions.cs` | Modify — add DI registration |
+| `src/MemSentinel.Core/Collectors/ProcessInfo.cs` | Create |
+| `src/MemSentinel.Core/Collectors/IProcessLocator.cs` | Create |
+| `src/MemSentinel.Core/Collectors/SystemProcessLocator.cs` | Create |
+| `src/MemSentinel.Core/Collectors/MockProcessLocator.cs` | Create |
+| `src/MemSentinel.Agent/Infrastructure/CoreExtensions.cs` | Modify — register IProcessLocator, refactor IMemoryProvider factory |
 | `src/MemSentinel.Agent/Logging/Log.cs` | Modify — add 2 LoggerMessage methods |
-| `src/MemSentinel.Agent/Worker.cs` | Modify — inject locator, startup check |
-| `src/MemSentinel.Agent/Program.cs` | Modify — add `/ready` endpoint |
-| `deploy/k8s/deployment.yaml` | Modify — readiness probe path (Step 8) |
+| `src/MemSentinel.Agent/Worker.cs` | Modify — inject IProcessLocator, startup check |
+| `src/MemSentinel.Agent/Program.cs` | Modify — add `/health/processes` endpoint |

@@ -208,9 +208,9 @@ The goal of this phase is to establish the "handshake" between the Sidecar and t
 - [x] **Task 1.1: Shared Volume Architecture Implementation** ✅ Done
 - [x] Configure the Helm chart/Deployment YAML to mount an `EmptyDir` volume at `/tmp` for both containers.
 - [x] **Sub-task:** Verify that the .NET runtime successfully creates the `dotnet-diagnostic-*.sock` file in the shared directory.
-- [ ] **Task 1.2: Process Namespace Integration**
-- [ ] Implement and test the `shareProcessNamespace: true` flag in the Pod spec.
-- [ ] **Sub-task:** Create a "Health Check" in the Agent that runs `Process.GetProcesses()` to confirm it can see the API's PID (usually PID 1 or close to it).
+- [x] **Task 1.2: Process Namespace Integration** ✅ Done
+- [x] Implement and test the `shareProcessNamespace: true` flag in the Pod spec.
+- [x] **Sub-task:** Create a "Health Check" in the Agent that runs `Process.GetProcesses()` to confirm it can see the API's PID (usually PID 1 or close to it).
 - [ ] **Task 1.3: Unix Domain Socket (UDS) Client Wrapper**
 - [ ] Develop the `DotNetDiagnosticClient` using `Microsoft.Diagnostics.NETCore.Client`.
 - [ ] **Sub-task:** Implement a "Ping" mechanism to ensure the sidecar can attach to the API without permission errors (`SYS_PTRACE` capabilities check).

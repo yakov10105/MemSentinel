@@ -9,6 +9,7 @@ namespace MemSentinel.Agent;
 public sealed class Worker(
     IMemoryProvider memoryProvider,
     IDiagnosticPortLocator diagnosticPortLocator,
+    IProcessLocator processLocator,
     IOptionsMonitor<SentinelOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
@@ -16,6 +17,7 @@ public sealed class Worker(
     private static readonly TimeSpan CircuitBreakerSleep = TimeSpan.FromMinutes(10);
 
     internal string? SocketPath { get; private set; }
+    internal ProcessInfo? TargetProcess { get; private set; }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,6 +30,13 @@ public sealed class Worker(
             Log.DiagnosticPortFound(logger, SocketPath);
         else
             Log.DiagnosticPortNotFound(logger);
+
+        TargetProcess = await processLocator.FindTargetAsync(opts.TargetProcessName, stoppingToken);
+
+        if (TargetProcess is { } proc)
+            Log.TargetProcessFound(logger, proc.ProcessName, proc.Pid);
+        else
+            Log.TargetProcessNotFound(logger, opts.TargetProcessName);
 
         int consecutiveFailures = 0;
 
