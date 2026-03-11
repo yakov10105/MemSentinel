@@ -14,4 +14,8 @@
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.661903" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="MemSentinel.UnitTests" />
+  </ItemGroup>
+
 </Project>

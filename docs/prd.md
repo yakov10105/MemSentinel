@@ -214,15 +214,15 @@ The goal of this phase is to establish the "handshake" between the Sidecar and t
 - [x] **Task 1.3: Unix Domain Socket (UDS) Client Wrapper** ✅ Done
 - [x] Develop the `DotNetDiagnosticClient` using `Microsoft.Diagnostics.NETCore.Client`.
 - [x] **Sub-task:** Implement a "Ping" mechanism to ensure the sidecar can attach to the API without permission errors (`SYS_PTRACE` capabilities check).
-- [ ] **Task 1.4: Linux /proc Parser (Unmanaged Memory)**
-- [ ] Build a high-performance parser for `/proc/[pid]/status` and `/proc/[pid]/smaps_rollup`.
-- [ ] **Sub-task:** Extract Resident Set Size (RSS), Proportional Set Size (PSS), and Virtual Memory metrics.
+- [x] **Task 1.4: Linux /proc Parser (Unmanaged Memory)** ✅ Done
+- [x] Build a high-performance parser for `/proc/[pid]/status` and `/proc/[pid]/smaps_rollup`.
+- [x] **Sub-task:** Extract Resident Set Size (RSS), Proportional Set Size (PSS), and Virtual Memory metrics.
 
 **Phase 1 DoD:**
 
-- [ ] Sidecar can successfully identify the API's PID.
-- [ ] Sidecar can read the API's RSS memory from the Linux kernel.
-- [ ] A "Connection Successful" log is generated upon Pod startup.
+- [x] Sidecar can successfully identify the API's PID.
+- [x] Sidecar can read the API's RSS memory from the Linux kernel.
+- [x] A "Connection Successful" log is generated upon Pod startup.
 
 ### Phase 2: The "Watchdog" & Trigger Logic (Monitoring)
 
