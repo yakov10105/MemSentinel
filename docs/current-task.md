@@ -1,89 +1,71 @@
-# Current Task: 1.3 — Unix Domain Socket (UDS) Client Wrapper
+# Task 1.4 — Linux /proc Parser (Unmanaged Memory)
 
-**PRD Reference:** Phase 1, Task 1.3
-**Goal:** Wrap `Microsoft.Diagnostics.NETCore.Client.DiagnosticsClient` behind `IDotNetDiagnosticClient`. Implement a "Ping" that calls `GetProcessInfo()` to prove the sidecar can attach to the API's diagnostic port without `SYS_PTRACE` errors. This establishes the exclusive-access pattern (`SemaphoreSlim`) that all future heap-analysis tasks will inherit.
-
-**Branch:** `task/1.3-uds-client` (cut from `phase/1-plumbing`)
-
-**Layers touched:** `MemSentinel.Core` (new interface + implementations, new NuGet), `MemSentinel.Agent` (DI wiring, endpoint, log messages, Worker startup check)
+**PRD Reference:** Phase 1, Task 1.4
+**Branch:** `task/1.4-proc-parser` (cut from `phase/1-plumbing`)
+**Layers touched:** `MemSentinel.Core` (extract parser, add InternalsVisibleTo), `MemSentinel.UnitTests` (new tests), `MemSentinel.Agent` (new endpoint)
 
 ---
 
-## Acceptance Criteria (DoD from PRD)
+## What Already Exists (Phase 0)
+`LinuxMemoryProvider` already reads:
+- `/proc/[pid]/status` → VmRSS, VmSize
+- `/proc/[pid]/smaps_rollup` → Pss
+- Algorithm: `ArrayPool<byte>` + `Utf8Parser` + `ReadOnlySpan<byte>` line scanning
 
-- [x] `IDotNetDiagnosticClient` wraps `Microsoft.Diagnostics.NETCore.Client`
-- [x] `PingAsync()` returns `Result<DiagnosticConnectionInfo>` — never throws
-- [x] All `DiagnosticsClient` calls guarded by `SemaphoreSlim(1,1)`
-- [x] `SYS_PTRACE` error surfaces as `Result.Failure` with code `"PTRACE_DENIED"`
-- [x] Startup log confirms attach success or failure
-- [x] `GET /health/diagnostic-port` returns `200` on success, `503` on failure
-- [x] `dotnet build` — 0 warnings, 0 errors ✅
+**Gap:** parser logic is `private static` — untestable without real `/proc` files. No tests exist. No endpoint to confirm readings in-cluster.
 
 ---
 
-## Implementation Steps
-
-- [x] **Step 1 — `DiagnosticConnectionInfo` record (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/DiagnosticConnectionInfo.cs`
-  - `readonly record struct DiagnosticConnectionInfo(int Pid, string RuntimeVersion, string CommandLine)`
-
-- [x] **Step 2 — `IDotNetDiagnosticClient` interface (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/IDotNetDiagnosticClient.cs`
-  - `bool IsSupported { get; }`
-  - `ValueTask<Result<DiagnosticConnectionInfo>> PingAsync(CancellationToken ct)`
-
-- [x] **Step 3 — Add NuGet package to Core**
-  - `dotnet add src/MemSentinel.Core package Microsoft.Diagnostics.NETCore.Client`
-
-- [x] **Step 4 — `DotNetDiagnosticClient` implementation (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/DotNetDiagnosticClient.cs`
-  - Constructor: `(IProcessLocator processLocator, IOptions<SentinelOptions> options)`
-  - `SemaphoreSlim _gate = new(1, 1)` — guards all `DiagnosticsClient` calls
-  - `PingAsync`: await gate → `Task.Run` wraps `new DiagnosticsClient(pid).GetProcessInfo()` → map to `DiagnosticConnectionInfo` → `Result.Success`
-  - Catches `UnauthorizedAccessException` → `Result.Failure("PTRACE_DENIED", ...)`
-  - Catches all other exceptions → `Result.Failure("ATTACH_FAILED", ...)`
-  - Always releases gate in `finally`
-  - `IsSupported` returns `OperatingSystem.IsLinux()`
-
-- [x] **Step 5 — `MockDotNetDiagnosticClient` (Core/Collectors)**
-  - New file: `src/MemSentinel.Core/Collectors/MockDotNetDiagnosticClient.cs`
-  - Returns `Result.Success(new DiagnosticConnectionInfo(Pid: 1, RuntimeVersion: "mock-10.0", CommandLine: "dotnet mock"))`
-  - `IsSupported` returns `true`
-
-- [x] **Step 6 — DI registration (Agent/Infrastructure/CoreExtensions.cs)**
-  - Register `IDotNetDiagnosticClient`: `DotNetDiagnosticClient` on Linux, `MockDotNetDiagnosticClient` on Windows
-  - `DotNetDiagnosticClient` is Singleton (holds the `SemaphoreSlim`)
-
-- [x] **Step 7 — LoggerMessage entries (Agent/Logging/Log.cs)**
-  - `DiagnosticClientConnected(ILogger, int pid, string runtimeVersion)` — LogLevel.Information
-  - `DiagnosticClientFailed(ILogger, Exception, string errorCode)` — LogLevel.Warning
-
-- [x] **Step 8 — Startup check in `Worker.cs`**
-  - Inject `IDotNetDiagnosticClient`
-  - After process-locator check: call `PingAsync()`
-  - Log `DiagnosticClientConnected` or `DiagnosticClientFailed`
-  - Store `DiagnosticConnectionInfo?` in a field for future tasks
-
-- [x] **Step 9 — `GET /health/diagnostic-port` endpoint (Agent/Program.cs)**
-  - Resolves `IDotNetDiagnosticClient`, calls `PingAsync()`
-  - Returns `200 { status: "connected", pid, runtimeVersion, commandLine }` on success
-  - Returns `503 { status: "failed", errorCode, message }` on failure
-
-- [x] **Step 10 — `dotnet build`**
-  - Run build, confirm 0 warnings, 0 errors ✅
+## Acceptance Criteria (PRD Phase 1 DoD)
+- [ ] Sidecar can read the API's RSS memory from the Linux kernel
+- [ ] `GET /metrics` returns `{ rssBytes, pssBytes, vmSizeBytes, capturedAt }` with HTTP 200
+- [ ] Unit tests cover the parser with synthetic `/proc` content
+- [ ] `dotnet build` — 0 warnings, 0 errors
+- [ ] `dotnet test` — all passing
 
 ---
 
-## Files Created / Modified
+## Steps
+
+- [x] **Step 1 — Extract `ProcFileParser` (Core/Collectors)**
+  - Create `src/MemSentinel.Core/Collectors/ProcFileParser.cs`
+  - `internal static class ProcFileParser`
+  - Move `ParseField(ReadOnlySpan<byte>, ReadOnlySpan<byte>)` and `SkipWhitespace(ReadOnlySpan<byte>)` from `LinuxMemoryProvider`
+
+- [x] **Step 2 — Update `LinuxMemoryProvider` (Core/Providers)**
+  - Remove the two private static methods
+  - Call `ProcFileParser.ParseField(...)` instead
+  - No behaviour change — pure refactor
+
+- [x] **Step 3 — Add `InternalsVisibleTo` to `MemSentinel.Core.csproj`**
+  - Allows test project to access `internal ProcFileParser`
+
+- [x] **Step 4 — Write unit tests (UnitTests/Collectors/ProcFileParserTests.cs)**
+  - Parses VmRSS from realistic `/proc/[pid]/status` bytes
+  - Parses Pss from realistic `/proc/[pid]/smaps_rollup` bytes
+  - Returns 0 when field not found
+  - Returns 0 when line is malformed (no numeric value)
+  - Handles large values (multi-GB — fits in `long`)
+  - Handles field at end of buffer (no trailing newline)
+
+- [x] **Step 5 — Add `GET /metrics` endpoint (Agent/Program.cs)**
+  - Calls `IMemoryProvider.GetRssMemoryAsync()`
+  - Returns `200 { rssBytes, pssBytes, vmSizeBytes, capturedAt }`
+
+- [x] **Step 6 — Build, test, and update PRD**
+  - `dotnet build` → 0 warnings, 0 errors ✅
+  - `dotnet test` → 6/6 passed ✅
+  - Update `docs/prd.md` Task 1.4 → ✅ Done
+
+---
+
+## Files to Create / Modify
 
 | File | Action |
 |---|---|
-| `src/MemSentinel.Core/Collectors/DiagnosticConnectionInfo.cs` | Create |
-| `src/MemSentinel.Core/Collectors/IDotNetDiagnosticClient.cs` | Create |
-| `src/MemSentinel.Core/Collectors/DotNetDiagnosticClient.cs` | Create |
-| `src/MemSentinel.Core/Collectors/MockDotNetDiagnosticClient.cs` | Create |
-| `src/MemSentinel.Core/MemSentinel.Core.csproj` | Modify — add NuGet |
-| `src/MemSentinel.Agent/Infrastructure/CoreExtensions.cs` | Modify — add DI registration |
-| `src/MemSentinel.Agent/Logging/Log.cs` | Modify — 2 new LoggerMessage methods |
-| `src/MemSentinel.Agent/Worker.cs` | Modify — inject client, startup ping |
-| `src/MemSentinel.Agent/Program.cs` | Modify — add `/health/diagnostic-port` |
+| `src/MemSentinel.Core/Collectors/ProcFileParser.cs` | Create |
+| `src/MemSentinel.Core/Providers/LinuxMemoryProvider.cs` | Modify — use ProcFileParser |
+| `src/MemSentinel.Core/MemSentinel.Core.csproj` | Modify — InternalsVisibleTo |
+| `tests/MemSentinel.UnitTests/Collectors/ProcFileParserTests.cs` | Create |
+| `src/MemSentinel.Agent/Program.cs` | Modify — add /metrics endpoint |
+| `docs/prd.md` | Modify — Task 1.4 ✅ Done |

@@ -3,6 +3,7 @@ using MemSentinel.Agent;
 using MemSentinel.Agent.Infrastructure;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Collectors;
+using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -56,6 +57,18 @@ app.MapGet("/health/diagnostic-port", async (IDotNetDiagnosticClient client, Can
     return result.IsSuccess && result.Value is { } conn
         ? Results.Ok(new { status = "connected", pid = conn.Pid, runtimeVersion = conn.RuntimeVersion, commandLine = conn.CommandLine })
         : Results.Json(new { status = "failed", errorCode = result.Error?.Code, message = result.Error?.Message }, statusCode: 503);
+});
+
+app.MapGet("/metrics", async (IMemoryProvider memoryProvider, CancellationToken ct) =>
+{
+    var reading = await memoryProvider.GetRssMemoryAsync(ct);
+    return Results.Ok(new
+    {
+        rssBytes = reading.RssBytes,
+        pssBytes = reading.PssBytes,
+        vmSizeBytes = reading.VmSizeBytes,
+        capturedAt = reading.CapturedAt
+    });
 });
 
 app.Run();
