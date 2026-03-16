@@ -246,3 +246,137 @@ The goal is to build the autonomous brain that decides when a leak is occurring.
   - Shared `/tmp` volume (EmptyDir equivalent) for UDS socket.
   - Agent thresholds tuned low (`ContainerMemoryLimitMb: 256`, `RssLimitPercentage: 50`, `VelocityThresholdMbPerMinute: 1`) so triggers fire within seconds of calling `/leak/managed`.
 - [ ] **Sub-task:** Verify in Docker Compose that the Agent logs `TargetProcessFound` with the TestTarget's real PID, `TriggerFired` after a few `/leak/managed` calls, and that RSS drops are reflected after `/leak/reset`.
+
+**Phase 2 DoD:**
+
+- [x] Agent logs `TriggerFired` when RSS velocity exceeds configured threshold.
+- [x] Hard threshold and velocity threshold evaluate independently and combinatorially.
+- [x] Docker Compose stack boots and agent attaches to TestTarget as a true sidecar.
+
+### Phase 3: The "Diagnostic Engine" (Capture, Analyze & Store)
+
+The goal is to close the loop from trigger detection to actionable output: capture two heap snapshots via EventPipe/gcdump, diff them with ClrMD, and persist the results to local storage so the Agent's API can serve them.
+
+**Task 3.1: EventPipe Live GC Metrics** ⬜ Pending
+
+Replace the zeroed-out `HeapMetadata` returned by `LinuxMemoryProvider.GetHeapMetadataAsync` with real values streamed from the target process via EventPipe.
+
+**Sub-tasks:**
+
+- [ ] Define `IGCMetricsProvider` in `MemSentinel.Core/Collectors/` with `ValueTask<HeapMetadata> GetAsync(CancellationToken ct)`.
+- [ ] Implement `EventPipeGCMetricsProvider` using `DiagnosticsClient.StartEventPipeSession` with `GCKeyword` events (keyword `0x1`, level `Verbose`).
+- [ ] Subscribe to `GC/HeapStats` events and extract Gen0/Gen1/Gen2/LOH/POH heap sizes into `HeapMetadata`.
+- [ ] Register `EventPipeGCMetricsProvider` as `IGCMetricsProvider` singleton in Agent DI (only when `IsLinux()`; keep `NullGCMetricsProvider` for Windows/Mock mode).
+- [ ] Wire `IGCMetricsProvider` into `Worker.DoWorkAsync` — replace `memoryProvider.GetHeapMetadataAsync` call with the new provider.
+- [ ] Add `[LoggerMessage]` entries: `GCHeapStats` (Info) logging Gen0/Gen1/Gen2/LOH sizes.
+
+**DoD:** `GrowthVelocity.ManagedLeakMbPerMinute` is non-zero when the TestTarget `/leak/managed` endpoint is called; logs show real Gen2/LOH values.
+
+---
+
+**Task 3.2: DiagnosticTrigger Channel & Worker Wiring** ⬜ Pending
+
+Decouple trigger detection from diagnostic orchestration using `System.Threading.Channels`.
+
+**Sub-tasks:**
+
+- [ ] Define `DiagnosticTrigger` as a `readonly record struct` in `MemSentinel.Contracts/` with fields: `TriggerReason Reason`, `DateTimeOffset TriggeredAt`, `double CurrentRssMb`, `double VelocityMbPerMinute`.
+- [ ] Register `Channel<DiagnosticTrigger>` as singleton in `Program.cs`: `BoundedChannelOptions(4)` with `DropOldest`, `SingleReader = true`, `SingleWriter = true`. Register `Writer` and `Reader` separately.
+- [ ] Inject `ChannelWriter<DiagnosticTrigger>` into `Worker` — replace `Log.TriggerFired` fire-and-forget with `TryWrite` to the channel.
+- [ ] Create `DiagnosticOrchestrator` as a `BackgroundService` in `MemSentinel.Agent/` with `ChannelReader<DiagnosticTrigger>` dependency. Loop with `ReadAllAsync`.
+- [ ] `DiagnosticOrchestrator.ExecuteAsync` must implement the circuit breaker pattern (same as `Worker`).
+- [ ] Add `[LoggerMessage]` entries: `OrchestratorTriggerReceived` (Info), `OrchestratorBusy` (Warning, when a trigger arrives while a session is in progress).
+
+**DoD:** `Worker` writes to channel on trigger; `DiagnosticOrchestrator` receives and logs it; concurrent triggers are dropped via `DropOldest`; build passes 0 errors.
+
+---
+
+**Task 3.3: GCDump Capture Engine** ⬜ Pending
+
+Implement the gcdump capture mechanism using `Microsoft.Diagnostics.NETCore.Client`.
+
+**Sub-tasks:**
+
+- [ ] Define `IGCDumpCollector` in `MemSentinel.Core/Collectors/` with `Task<Result<string>> CaptureAsync(string outputPath, CancellationToken ct)` — returns the file path of the written `.gcdump` file.
+- [ ] Implement `EventPipeGCDumpCollector` using `DiagnosticsClient` EventPipe session with `GCHeapDumpKeyword` (`0x100000`). Write the raw event stream to the output path.
+- [ ] Guard with `SemaphoreSlim(1,1)` — only one capture at a time. Return `Result.Failure("CAPTURE_BUSY")` if already running.
+- [ ] Wrap all `DiagnosticsClient` calls in try/catch; return `Result.Failure("CAPTURE_FAILED", ex.Message)` on exception.
+- [ ] Ensure `ArrayPool<byte>` is used for all intermediate read buffers; return in `finally`.
+- [ ] Add `[LoggerMessage]` entries: `GCDumpStarted` (Info), `GCDumpComplete` (Info, include file size bytes), `GCDumpFailed` (Error).
+
+**DoD:** `EventPipeGCDumpCollector.CaptureAsync` produces a valid `.gcdump` file on disk when called against the running TestTarget; `dotnet-gcdump` CLI can open the file without errors.
+
+---
+
+**Task 3.4: HeapDiff Engine** ⬜ Pending
+
+Parse two `.gcdump` files with ClrMD and compute the object count/size delta between them.
+
+**Sub-tasks:**
+
+- [ ] Define `IHeapDiffEngine` in `MemSentinel.Core/Analysis/` with `Task<Result<HeapDiffReport>> DiffAsync(string pathA, string pathB, CancellationToken ct)`.
+- [ ] Define `HeapDiffReport` as a `readonly record struct` in `MemSentinel.Contracts/` with: `DateTimeOffset AnalyzedAt`, `IReadOnlyList<TypeDelta> TopGrowingTypes` (top 20 by size delta), `long TotalObjectDelta`, `long TotalBytesDelta`, `double LohFreePercent`.
+- [ ] Define `TypeDelta` as a `readonly record struct`: `string TypeName`, `int CountA`, `int CountB`, `long BytesA`, `long BytesB`.
+- [ ] Implement `HeapDiffEngine` using `DataTarget.LoadDump` for both paths. Enumerate objects once per dump (single-threaded). Use `string.Intern` for type names. Pre-size accumulation dictionaries with `capacity: 10_000`. Filter objects below 85 bytes (LOH boundary skip for small objects).
+- [ ] Parallelize only post-collection aggregation (join the two dictionaries by type name) — never parallelize heap enumeration.
+- [ ] Compute `LohFreePercent` from `ClrHeap.GetLohFreeRegions()`.
+- [ ] Always dispose `ClrRuntime` and `DataTarget` in `finally` blocks (not just `using`).
+- [ ] Add `[LoggerMessage]` entries: `HeapDiffStarted` (Info), `HeapDiffComplete` (Info, TypeCount + TotalBytesDelta), `HeapDiffFailed` (Error).
+- [ ] 100% test coverage required on `HeapDiffEngine` — use `FakeSnapshotBuilder` for synthetic gcdump pairs.
+
+**DoD:** After calling `/leak/managed` 10 times on TestTarget, `HeapDiffReport.TopGrowingTypes` contains `System.Byte[]` or `System.String` with a positive `CountB - CountA`; `LohFreePercent` is populated.
+
+---
+
+**Task 3.5: DiagnosticOrchestrator State Machine** ⬜ Pending
+
+Wire the full capture → diff → persist lifecycle into `DiagnosticOrchestrator` as an explicit state machine.
+
+**Sub-tasks:**
+
+- [ ] Define `OrchestratorState` enum: `Idle`, `CapturingA`, `Cooling`, `CapturingB`, `Analyzing`, `Persisting`, `Failed`.
+- [ ] Expose `OrchestratorState State { get; private set; }` as an `internal` property (visible via `[InternalsVisibleTo("MemSentinel.UnitTests")]`).
+- [ ] Implement `RunDiagnosticCycleAsync(DiagnosticTrigger trigger, CancellationToken ct)`:
+  1. `Idle → CapturingA`: Call `IGCDumpCollector.CaptureAsync` → write Snapshot A path.
+  2. `CapturingA → Cooling`: `Task.Delay(CoolingPeriodMinutes, ct)` from `SentinelOptions`.
+  3. `Cooling → CapturingB`: Call `IGCDumpCollector.CaptureAsync` → write Snapshot B path.
+  4. `CapturingB → Analyzing`: Call `IHeapDiffEngine.DiffAsync(pathA, pathB, ct)`.
+  5. `Analyzing → Persisting`: Call `IStorageProvider.SaveSessionAsync(session, ct)`.
+  6. `Persisting → Idle`: Clean up temp files.
+- [ ] On any `Result.Failure` or exception: transition to `Failed`, log with `[LoggerMessage]`, increment failure counter. After 3 consecutive failures, enter circuit breaker sleep.
+- [ ] On `OperationCanceledException`: transition to `Idle` cleanly — do not count as failure.
+- [ ] Add state transition logging with `[LoggerMessage]` for each transition (one message per transition, Info level).
+
+**DoD:** Full cycle visible in Docker Compose logs: `OrchestratorTriggerReceived → CapturingA → Cooling → CapturingB → Analyzing → Persisting → Idle`. State machine tests cover all 7 states and 3-failure circuit breaker.
+
+---
+
+**Task 3.6: Local Storage + Session Registry + API** ⬜ Pending
+
+Persist diagnostic sessions to the local filesystem and expose them via Minimal API endpoints.
+
+**Sub-tasks:**
+
+- [ ] Define `IStorageProvider` in `MemSentinel.Core/` with: `Task<Result<string>> SaveSessionAsync(DiagnosticSession session, CancellationToken ct)`, `Task<Result<DiagnosticSession>> GetSessionAsync(Guid id, CancellationToken ct)`, `Task<Result<IReadOnlyList<DiagnosticSession>>> ListSessionsAsync(CancellationToken ct)`.
+- [ ] Define `DiagnosticSession` in `MemSentinel.Contracts/` with: `Guid Id`, `DateTimeOffset StartedAt`, `DateTimeOffset CompletedAt`, `TriggerReason TriggerReason`, `string SnapshotAPath`, `string SnapshotBPath`, `HeapDiffReport? DiffReport`.
+- [ ] Implement `LocalPvStorageProvider`: write `{session.Id}/session.json` (System.Text.Json, `JsonSerializerOptions` from DI) and copy `.gcdump` files into `{session.Id}/` subdirectory. Base path from `SentinelOptions.LocalStoragePath` (default: `/data/memsentinel`).
+- [ ] Register `LocalPvStorageProvider` as `IStorageProvider` singleton when `StorageProvider == "Local"` in `StorageExtensions.cs`.
+- [ ] Build in-memory `SessionRegistry` (`ConcurrentDictionary<Guid, DiagnosticSession>`, capacity 64) that caches sessions for fast API reads — populated at startup by scanning storage and on each new session write.
+- [ ] Add Minimal API endpoints in `MemSentinel.Agent/Api/`:
+  - `GET /sessions` — returns `IReadOnlyList<DiagnosticSession>` from `SessionRegistry`.
+  - `GET /sessions/{id}` — returns single `DiagnosticSession` or 404.
+  - `GET /sessions/{id}/diff` — returns `HeapDiffReport` or 404 if not yet analyzed.
+- [ ] Add `[LoggerMessage]` entries: `SessionSaved` (Info, Id + path), `SessionLoadFailed` (Warning).
+
+**DoD:** After a full orchestrator cycle completes, `GET /sessions` returns the session with non-null `DiffReport`; the `.gcdump` files are present in the local volume; `dotnet build` 0 errors.
+
+---
+
+**Phase 3 DoD:**
+
+- [ ] `ManagedLeakMbPerMinute` is non-zero in Docker Compose logs after calling `/leak/managed`.
+- [ ] Full diagnostic cycle (`CapturingA → Cooling → CapturingB → Analyzing → Persisting → Idle`) completes without error against TestTarget.
+- [ ] `GET /sessions/{id}/diff` returns a `HeapDiffReport` with at least one entry in `TopGrowingTypes`.
+- [ ] `HeapDiffEngine` has 100% test coverage via `FakeSnapshotBuilder`.
+- [ ] `DiagnosticOrchestrator` state machine transitions are covered by unit tests.
+- [ ] `dotnet build` 0 warnings, 0 errors.
