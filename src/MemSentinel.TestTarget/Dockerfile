@@ -21,6 +21,6 @@ COPY --from=build /publish .
 EXPOSE 8080
 
 ENV ASPNETCORE_URLS=http://+:8080 \
-    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 
 ENTRYPOINT ["dotnet", "MemSentinel.TestTarget.dll"]

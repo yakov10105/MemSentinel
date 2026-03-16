@@ -14,7 +14,7 @@ public sealed class LinuxMemoryProvider(int pid) : IMemoryProvider
     {
         var rssKb = ReadProcField(_statusPath, "VmRSS:"u8);
         var vmSizeKb = ReadProcField(_statusPath, "VmSize:"u8);
-        var pssKb = File.Exists(_smapsPath) ? ReadProcField(_smapsPath, "Pss:"u8) : 0;
+        var pssKb = TryReadProcField(_smapsPath, "Pss:"u8);
 
         return ValueTask.FromResult(new RssMemoryReading(
             RssBytes: rssKb * 1024,
@@ -38,6 +38,22 @@ public sealed class LinuxMemoryProvider(int pid) : IMemoryProvider
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static long TryReadProcField(string path, ReadOnlySpan<byte> field)
+    {
+        try
+        {
+            return ReadProcField(path, field);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+        catch (IOException)
+        {
+            return 0;
         }
     }
 }

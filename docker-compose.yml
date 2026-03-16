@@ -19,6 +19,9 @@ services:
       context: .
       dockerfile: Dockerfile
     pid: "service:target-api"
+    user: "root"
+    cap_add:
+      - SYS_PTRACE
     ports:
       - "5000:5000"
     volumes:

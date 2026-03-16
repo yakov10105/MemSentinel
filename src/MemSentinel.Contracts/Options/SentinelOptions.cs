@@ -4,6 +4,8 @@ public sealed class ThresholdOptions
 {
     public double RssLimitPercentage { get; init; } = 80.0;
     public double Gen2GrowthLimitMb { get; init; } = 100.0;
+    public double ContainerMemoryLimitMb { get; init; } = 512.0;
+    public double VelocityThresholdMbPerMinute { get; init; } = 5.0;
 }
 
 public sealed class SentinelOptions
