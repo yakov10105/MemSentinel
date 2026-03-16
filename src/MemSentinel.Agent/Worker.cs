@@ -5,6 +5,7 @@ using MemSentinel.Core.Collectors;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 
+
 namespace MemSentinel.Agent;
 
 public sealed class Worker(
@@ -107,6 +108,16 @@ public sealed class Worker(
 
             if (velocity.IsLeakSuspected)
                 Log.LeakSuspected(logger, velocity.RssMbPerMinute, velocity.ManagedLeakMbPerMinute);
+
+            var thresholdOpts = options.CurrentValue.Thresholds;
+            var thresholds = new TriggerThresholds(
+                thresholdOpts.ContainerMemoryLimitMb,
+                thresholdOpts.RssLimitPercentage,
+                thresholdOpts.VelocityThresholdMbPerMinute);
+
+            var trigger = TriggerEvaluator.Evaluate(reading, velocity, thresholds);
+            if (trigger.IsTriggered)
+                Log.TriggerFired(logger, trigger.Reason.ToString(), trigger.CurrentRssMb, trigger.LimitMb, trigger.RssUsedPercent, trigger.Velocity.RssMbPerMinute);
         }
     }
 }

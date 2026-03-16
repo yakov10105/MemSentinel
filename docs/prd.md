@@ -231,6 +231,6 @@ The goal is to build the autonomous brain that decides when a leak is occurring.
 - [x] **Task 2.1: Sliding Window Metrics Engine** ✅ Done
 - [x] Implement an in-memory time-series buffer (e.g., last 60 minutes of data) to calculate memory growth velocity.
 - [x] **Sub-task:** Distinguish between "Normal Growth" (Gen 0 allocations) and "Suspected Leak" (Gen 2/LOH growth).
-- [ ] **Task 2.2: Multi-Threshold Trigger System**
-- [ ] **Hard Threshold:** Trigger at a fixed percentage (e.g., 85% of RAM limit).
-- [ ] **Velocity Threshold:** Trigger if memory grows by $X\%$ over $Y$ minutes without a corresponding drop.
+- [x] **Task 2.2: Multi-Threshold Trigger System** ✅ Done
+- [x] **Hard Threshold:** Trigger at a fixed percentage (e.g., 85% of RAM limit).
+- [x] **Velocity Threshold:** Trigger if memory grows by $X\%$ over $Y$ minutes without a corresponding drop.
