@@ -231,6 +231,18 @@ The goal is to build the autonomous brain that decides when a leak is occurring.
 - [x] **Task 2.1: Sliding Window Metrics Engine** ✅ Done
 - [x] Implement an in-memory time-series buffer (e.g., last 60 minutes of data) to calculate memory growth velocity.
 - [x] **Sub-task:** Distinguish between "Normal Growth" (Gen 0 allocations) and "Suspected Leak" (Gen 2/LOH growth).
-- [ ] **Task 2.2: Multi-Threshold Trigger System**
-- [ ] **Hard Threshold:** Trigger at a fixed percentage (e.g., 85% of RAM limit).
-- [ ] **Velocity Threshold:** Trigger if memory grows by $X\%$ over $Y$ minutes without a corresponding drop.
+- [x] **Task 2.2: Multi-Threshold Trigger System** ✅ Done
+- [x] **Hard Threshold:** Trigger at a fixed percentage (e.g., 85% of RAM limit).
+- [x] **Velocity Threshold:** Trigger if memory grows by $X\%$ over $Y$ minutes without a corresponding drop.
+- [ ] **Task 2.3: TestTarget API & Docker Compose Sidecar Simulation** ⬜ Pending
+- [ ] Create `src/MemSentinel.TestTarget/` — a standalone .NET 10 Minimal API with controllable memory leak endpoints.
+- [ ] **`POST /leak/managed`** — accumulates many small managed objects (strings, byte arrays, dictionary entries) into static collections on each call, promoting objects to Gen2/LOH and holding them alive across GCs.
+- [ ] **`POST /leak/unmanaged`** — creates leaked `HttpClient` instances and `GCHandle`-pinned byte buffers per call to simulate unmanaged/native memory growth.
+- [ ] **`POST /leak/reset`** — clears all static collections and releases GC handles, dropping RSS so the velocity signal resets cleanly.
+- [ ] **`GET /health`** — returns `200 OK` for Docker Compose health checks.
+- [ ] Add `MemSentinel.TestTarget` to `MemSentinel.slnx` for solution-level `dotnet build`.
+- [ ] Create `docker-compose.yml` at repo root wiring `target-api` and `agent` as a true sidecar pair:
+  - `pid: "service:target-api"` on the agent container (shared PID namespace).
+  - Shared `/tmp` volume (EmptyDir equivalent) for UDS socket.
+  - Agent thresholds tuned low (`ContainerMemoryLimitMb: 256`, `RssLimitPercentage: 50`, `VelocityThresholdMbPerMinute: 1`) so triggers fire within seconds of calling `/leak/managed`.
+- [ ] **Sub-task:** Verify in Docker Compose that the Agent logs `TargetProcessFound` with the TestTarget's real PID, `TriggerFired` after a few `/leak/managed` calls, and that RSS drops are reflected after `/leak/reset`.
