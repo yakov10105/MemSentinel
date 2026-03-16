@@ -1,0 +1,39 @@
+services:
+  target-api:
+    build:
+      context: .
+      dockerfile: src/MemSentinel.TestTarget/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - diag-socket:/tmp
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pid: "service:target-api"
+    ports:
+      - "5000:5000"
+    volumes:
+      - diag-socket:/tmp
+    depends_on:
+      target-api:
+        condition: service_healthy
+    environment:
+      - Sentinel__TargetProcessName=dotnet
+      - Sentinel__PollingIntervalSeconds=5
+      - Sentinel__MetricsWindowMinutes=10
+      - Sentinel__Thresholds__ContainerMemoryLimitMb=256
+      - Sentinel__Thresholds__RssLimitPercentage=50
+      - Sentinel__Thresholds__VelocityThresholdMbPerMinute=1
+      - Sentinel__Thresholds__Gen2GrowthLimitMb=50
+
+volumes:
+  diag-socket:

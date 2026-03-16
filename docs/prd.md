@@ -234,7 +234,7 @@ The goal is to build the autonomous brain that decides when a leak is occurring.
 - [x] **Task 2.2: Multi-Threshold Trigger System** ✅ Done
 - [x] **Hard Threshold:** Trigger at a fixed percentage (e.g., 85% of RAM limit).
 - [x] **Velocity Threshold:** Trigger if memory grows by $X\%$ over $Y$ minutes without a corresponding drop.
-- [ ] **Task 2.3: TestTarget API & Docker Compose Sidecar Simulation** ⬜ Pending
+- [x] **Task 2.3: TestTarget API & Docker Compose Sidecar Simulation** ✅ Done
 - [ ] Create `src/MemSentinel.TestTarget/` — a standalone .NET 10 Minimal API with controllable memory leak endpoints.
 - [ ] **`POST /leak/managed`** — accumulates many small managed objects (strings, byte arrays, dictionary entries) into static collections on each call, promoting objects to Gen2/LOH and holding them alive across GCs.
 - [ ] **`POST /leak/unmanaged`** — creates leaked `HttpClient` instances and `GCHandle`-pinned byte buffers per call to simulate unmanaged/native memory growth.
