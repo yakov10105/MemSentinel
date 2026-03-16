@@ -4,7 +4,7 @@ WORKDIR /src
 COPY ["src/MemSentinel.Agent/MemSentinel.Agent.csproj", "MemSentinel.Agent/"]
 COPY ["src/MemSentinel.Core/MemSentinel.Core.csproj", "MemSentinel.Core/"]
 COPY ["src/MemSentinel.Contracts/MemSentinel.Contracts.csproj", "MemSentinel.Contracts/"]
-RUN dotnet restore "MemSentinel.Agent/MemSentinel.Agent.csproj"
+RUN dotnet restore "MemSentinel.Agent/MemSentinel.Agent.csproj" -r linux-x64
 
 COPY src/MemSentinel.Agent/    MemSentinel.Agent/
 COPY src/MemSentinel.Core/     MemSentinel.Core/
@@ -29,6 +29,6 @@ USER sentinel
 EXPOSE 5000
 
 ENV ASPNETCORE_URLS=http://+:5000 \
-    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 
 ENTRYPOINT ["dotnet", "MemSentinel.Agent.dll"]

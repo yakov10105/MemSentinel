@@ -40,4 +40,7 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Warning, "Leak suspected: RssMbPerMin={RssMbPerMinute:F3} ManagedLeakMbPerMin={ManagedLeakMbPerMinute:F3}")]
     public static partial void LeakSuspected(ILogger logger, double rssMbPerMinute, double managedLeakMbPerMinute);
+
+    [LoggerMessage(LogLevel.Warning, "Trigger fired: Reason={Reason} RSS={CurrentRssMb:F1}MB/{LimitMb:F1}MB ({RssUsedPercent:F1}%) Velocity={VelocityMbPerMinute:F3}MB/min")]
+    public static partial void TriggerFired(ILogger logger, string reason, double currentRssMb, double limitMb, double rssUsedPercent, double velocityMbPerMinute);
 }
