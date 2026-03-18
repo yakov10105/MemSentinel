@@ -389,7 +389,7 @@ The goal of this phase is to build the full React/Next.js dashboard that surface
 
 ---
 
-**Task 4.1: App Shell, Routing & Mock API Layer** ⬜ Pending
+**Task 4.1: App Shell, Routing & Mock API Layer** ✅ Done
 
 Establish the application skeleton that every subsequent task builds on: layout, navigation, routing, typed API client, and the mock data infrastructure.
 
