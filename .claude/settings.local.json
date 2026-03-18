@@ -12,7 +12,10 @@
       "Bash(git checkout:*)",
       "Bash(dotnet script:*)",
       "Read(//c/Users/Me/.nuget/packages/microsoft.diagnostics.netcore.client/**)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(python -c \"print\\(''ok''\\)\")",
+      "Bash(node -e \"console.log\\(''ok''\\)\")"
     ]
   }
 }
