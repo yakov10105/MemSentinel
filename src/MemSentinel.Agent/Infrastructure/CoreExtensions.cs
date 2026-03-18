@@ -46,6 +46,19 @@ internal static class CoreExtensions
             return new MockMemoryProvider();
         });
 
+        services.AddSingleton<IGCMetricsProvider>(sp =>
+        {
+            if (!OperatingSystem.IsLinux())
+                return new NullGCMetricsProvider();
+
+            var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
+            var locator = sp.GetRequiredService<IProcessLocator>();
+            var info = locator.FindTargetAsync(options.TargetProcessName, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            var pid = info?.Pid ?? System.Diagnostics.Process.GetCurrentProcess().Id;
+            return new EventPipeGCMetricsProvider(pid);
+        });
+
         services.AddSingleton<MetricsBuffer>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;

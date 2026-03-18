@@ -10,6 +10,7 @@ namespace MemSentinel.Agent;
 
 public sealed class Worker(
     IMemoryProvider memoryProvider,
+    IGCMetricsProvider gcMetricsProvider,
     IDiagnosticPortLocator diagnosticPortLocator,
     IProcessLocator processLocator,
     IDotNetDiagnosticClient diagnosticClient,
@@ -89,13 +90,21 @@ public sealed class Worker(
     private async Task DoWorkAsync(CancellationToken stoppingToken)
     {
         var reading = await memoryProvider.GetRssMemoryAsync(stoppingToken);
-        var heap = await memoryProvider.GetHeapMetadataAsync(stoppingToken);
+        var heap = await gcMetricsProvider.GetAsync(stoppingToken);
 
         Log.MemoryReading(
             logger,
             rssMb: reading.RssBytes / 1_048_576.0,
             pssMb: reading.PssBytes / 1_048_576.0,
             vmSizeMb: reading.VmSizeBytes / 1_048_576.0);
+
+        Log.GCHeapStats(
+            logger,
+            gen0Mb: heap.Gen0Bytes / 1_048_576.0,
+            gen1Mb: heap.Gen1Bytes / 1_048_576.0,
+            gen2Mb: heap.Gen2Bytes / 1_048_576.0,
+            lohMb: heap.LohBytes / 1_048_576.0,
+            pohMb: heap.PohBytes / 1_048_576.0);
 
         await metricsBuffer.AddAsync(new MetricSample(reading, heap), stoppingToken);
 
