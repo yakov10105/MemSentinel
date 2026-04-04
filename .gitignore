@@ -61,3 +61,5 @@ CLAUDE.local.md
 # Claude auto-memory (remove this line if you want to commit team memory)
 .claude/memory/
 .claude/memory.jsonl
+.claude/settings.local.json
+.claude/settings.local.json

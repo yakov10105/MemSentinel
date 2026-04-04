@@ -1,7 +1,8 @@
+using MemSentinel.Core.Collectors.Process;
 using MemSentinel.Core.Common;
 using Microsoft.Diagnostics.NETCore.Client;
 
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.Diagnostics;
 
 public sealed class DotNetDiagnosticClient(
     IProcessLocator processLocator,

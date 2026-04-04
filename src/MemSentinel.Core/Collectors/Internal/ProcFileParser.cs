@@ -1,6 +1,6 @@
 using System.Buffers.Text;
 
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.Internal;
 
 internal static class ProcFileParser
 {

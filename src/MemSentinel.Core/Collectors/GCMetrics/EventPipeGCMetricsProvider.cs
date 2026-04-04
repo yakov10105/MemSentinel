@@ -4,7 +4,7 @@ using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.GCMetrics;
 
 public sealed class EventPipeGCMetricsProvider(int pid) : IGCMetricsProvider, IAsyncDisposable
 {

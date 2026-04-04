@@ -1,6 +1,7 @@
+using MemSentinel.Core.Collectors.Diagnostics;
 using MemSentinel.Core.Common;
 
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.Mocks;
 
 public sealed class MockDotNetDiagnosticClient : IDotNetDiagnosticClient
 {

@@ -1,4 +1,4 @@
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.Diagnostics;
 
 public sealed class UnixDiagnosticPortLocator : IDiagnosticPortLocator
 {

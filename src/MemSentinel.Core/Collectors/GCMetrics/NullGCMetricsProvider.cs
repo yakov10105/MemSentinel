@@ -1,6 +1,6 @@
 using MemSentinel.Core.Providers;
 
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.GCMetrics;
 
 public sealed class NullGCMetricsProvider : IGCMetricsProvider
 {
