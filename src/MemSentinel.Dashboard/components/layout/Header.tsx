@@ -1,12 +1,16 @@
 "use client";
 
+import { useHeaderSlot } from "@/app/header-slot-context";
+
 const POD_OPTIONS = ["memsentinel-demo", "api-service-7d9f", "worker-abc123"];
 const NS_OPTIONS = ["default", "production", "staging"];
 
 export function Header() {
+  const headerSlot = useHeaderSlot();
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-800 bg-gray-950 px-6">
-      <div id="header-slot" />
+      <div>{headerSlot}</div>
 
       <div className="flex items-center gap-3">
         <select className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-600">

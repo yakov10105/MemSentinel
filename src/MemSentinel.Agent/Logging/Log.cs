@@ -46,4 +46,10 @@ public static partial class Log
 
     [LoggerMessage(LogLevel.Information, "GC heap stats: Gen0={Gen0Mb:F2}MB Gen1={Gen1Mb:F2}MB Gen2={Gen2Mb:F2}MB LOH={LohMb:F2}MB POH={PohMb:F2}MB")]
     public static partial void GCHeapStats(ILogger logger, double gen0Mb, double gen1Mb, double gen2Mb, double lohMb, double pohMb);
+
+    [LoggerMessage(LogLevel.Information, "Orchestrator trigger received. Reason={Reason} RSS={CurrentRssMb:F1}MB Velocity={VelocityMbPerMinute:F3}MB/min")]
+    public static partial void OrchestratorTriggerReceived(ILogger logger, string reason, double currentRssMb, double velocityMbPerMinute);
+
+    [LoggerMessage(LogLevel.Warning, "Orchestrator busy — session already in progress. Trigger dropped. Reason={Reason}")]
+    public static partial void OrchestratorBusy(ILogger logger, string reason);
 }

@@ -1,5 +1,7 @@
 using MemSentinel.Agent.Logging;
+using MemSentinel.Contracts;
 using MemSentinel.Contracts.Options;
+using System.Threading.Channels;
 using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors.Diagnostics;
 using MemSentinel.Core.Collectors.GCMetrics;
@@ -17,6 +19,7 @@ public sealed class Worker(
     IProcessLocator processLocator,
     IDotNetDiagnosticClient diagnosticClient,
     MetricsBuffer metricsBuffer,
+    ChannelWriter<DiagnosticTrigger> triggerWriter,
     IOptionsMonitor<SentinelOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
@@ -128,7 +131,10 @@ public sealed class Worker(
 
             var trigger = TriggerEvaluator.Evaluate(reading, velocity, thresholds);
             if (trigger.IsTriggered)
+            {
                 Log.TriggerFired(logger, trigger.Reason.ToString(), trigger.CurrentRssMb, trigger.LimitMb, trigger.RssUsedPercent, trigger.Velocity.RssMbPerMinute);
+                triggerWriter.TryWrite(new DiagnosticTrigger(trigger.Reason, DateTimeOffset.UtcNow, trigger.CurrentRssMb, trigger.Velocity.RssMbPerMinute));
+            }
         }
     }
 }

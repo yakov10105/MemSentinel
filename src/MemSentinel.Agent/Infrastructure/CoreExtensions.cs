@@ -1,6 +1,7 @@
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors.Diagnostics;
+using MemSentinel.Core.Collectors.GCDump;
 using MemSentinel.Core.Collectors.GCMetrics;
 using MemSentinel.Core.Collectors.Mocks;
 using MemSentinel.Core.Collectors.Process;
@@ -61,6 +62,19 @@ internal static class CoreExtensions
             var pid = info?.Pid ?? System.Diagnostics.Process.GetCurrentProcess().Id;
             return new EventPipeGCMetricsProvider(pid);
         });
+
+        services.AddSingleton<IGCDumpCollector>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<SentinelOptions>>().Value;
+            var locator = sp.GetRequiredService<IProcessLocator>();
+            var info = locator.FindTargetAsync(options.TargetProcessName, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            var pid = info?.Pid ?? System.Diagnostics.Process.GetCurrentProcess().Id;
+            var logger = sp.GetRequiredService<ILogger<EventPipeGCDumpCollector>>();
+            return new EventPipeGCDumpCollector(pid, logger);
+        });
+
+        services.AddSingleton<IHeapDiffEngine, HeapDiffEngine>();
 
         services.AddSingleton<MetricsBuffer>(sp =>
         {

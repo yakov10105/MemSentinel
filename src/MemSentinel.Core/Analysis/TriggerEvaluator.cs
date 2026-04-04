@@ -1,3 +1,4 @@
+using MemSentinel.Contracts;
 using MemSentinel.Core.Providers;
 
 namespace MemSentinel.Core.Analysis;

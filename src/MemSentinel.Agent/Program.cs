@@ -1,6 +1,8 @@
 using Log = MemSentinel.Agent.Logging.Log;
 using MemSentinel.Agent;
+using MemSentinel.Agent.BackgroundServices;
 using MemSentinel.Agent.Infrastructure;
+using MemSentinel.Contracts;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Collectors.Diagnostics;
@@ -8,6 +10,7 @@ using MemSentinel.Core.Collectors.Process;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 using Serilog;
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +24,17 @@ builder.Services.Configure<SentinelOptions>(
 
 builder.Services.AddMemoryProvider();
 
+var triggerChannel = Channel.CreateBounded<DiagnosticTrigger>(new BoundedChannelOptions(4)
+{
+    FullMode = BoundedChannelFullMode.DropOldest,
+    SingleReader = true,
+    SingleWriter = true
+});
+builder.Services.AddSingleton(triggerChannel.Writer);
+builder.Services.AddSingleton(triggerChannel.Reader);
+
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<DiagnosticOrchestrator>();
 
 var app = builder.Build();
 
