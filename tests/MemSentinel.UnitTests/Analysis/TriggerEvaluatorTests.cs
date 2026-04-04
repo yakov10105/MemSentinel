@@ -1,4 +1,5 @@
 using FluentAssertions;
+using MemSentinel.Contracts;
 using MemSentinel.Core.Analysis;
 using MemSentinel.Core.Providers;
 

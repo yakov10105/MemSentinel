@@ -1,4 +1,4 @@
-namespace MemSentinel.Core.Analysis;
+namespace MemSentinel.Contracts;
 
 public enum TriggerReason
 {

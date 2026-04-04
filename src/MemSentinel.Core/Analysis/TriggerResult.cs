@@ -1,3 +1,5 @@
+using MemSentinel.Contracts;
+
 namespace MemSentinel.Core.Analysis;
 
 public readonly record struct TriggerResult(
