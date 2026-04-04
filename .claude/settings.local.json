@@ -15,7 +15,8 @@
       "Bash(git pull:*)",
       "Bash(dotnet restore:*)",
       "Bash(python -c \"print\\(''ok''\\)\")",
-      "Bash(node -e \"console.log\\(''ok''\\)\")"
+      "Bash(node -e \"console.log\\(''ok''\\)\")",
+      "Bash(cd:*)"
     ]
   }
 }

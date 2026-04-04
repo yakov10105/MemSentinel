@@ -1,5 +1,5 @@
 using System.Buffers;
-using MemSentinel.Core.Collectors;
+using MemSentinel.Core.Collectors.Internal;
 
 namespace MemSentinel.Core.Providers;
 

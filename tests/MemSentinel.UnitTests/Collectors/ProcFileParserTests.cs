@@ -1,6 +1,6 @@
 using System.Text;
 using FluentAssertions;
-using MemSentinel.Core.Collectors;
+using MemSentinel.Core.Collectors.Internal;
 
 namespace MemSentinel.UnitTests.Collectors;
 

@@ -1,6 +1,4 @@
-using System.Diagnostics;
-
-namespace MemSentinel.Core.Collectors;
+namespace MemSentinel.Core.Collectors.Process;
 
 public sealed class SystemProcessLocator : IProcessLocator
 {
@@ -8,7 +6,7 @@ public sealed class SystemProcessLocator : IProcessLocator
 
     public ValueTask<ProcessInfo?> FindTargetAsync(string processName, CancellationToken ct)
     {
-        var processes = Process.GetProcessesByName(processName);
+        var processes = System.Diagnostics.Process.GetProcessesByName(processName);
         if (processes.Length == 0)
             return ValueTask.FromResult<ProcessInfo?>(null);
 

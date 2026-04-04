@@ -1,7 +1,9 @@
 using MemSentinel.Agent.Logging;
 using MemSentinel.Contracts.Options;
 using MemSentinel.Core.Analysis;
-using MemSentinel.Core.Collectors;
+using MemSentinel.Core.Collectors.Diagnostics;
+using MemSentinel.Core.Collectors.GCMetrics;
+using MemSentinel.Core.Collectors.Process;
 using MemSentinel.Core.Providers;
 using Microsoft.Extensions.Options;
 

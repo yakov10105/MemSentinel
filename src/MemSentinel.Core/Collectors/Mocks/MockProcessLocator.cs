@@ -1,4 +1,6 @@
-namespace MemSentinel.Core.Collectors;
+using MemSentinel.Core.Collectors.Process;
+
+namespace MemSentinel.Core.Collectors.Mocks;
 
 public sealed class MockProcessLocator : IProcessLocator
 {
