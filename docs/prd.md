@@ -274,7 +274,7 @@ Replace the zeroed-out `HeapMetadata` returned by `LinuxMemoryProvider.GetHeapMe
 
 ---
 
-**Task 3.2: DiagnosticTrigger Channel & Worker Wiring** ⬜ Pending
+**Task 3.2: DiagnosticTrigger Channel & Worker Wiring** ✅ Done
 
 Decouple trigger detection from diagnostic orchestration using `System.Threading.Channels`.
 
@@ -291,7 +291,7 @@ Decouple trigger detection from diagnostic orchestration using `System.Threading
 
 ---
 
-**Task 3.3: GCDump Capture Engine** ⬜ Pending
+**Task 3.3: GCDump Capture Engine** ✅ Done
 
 Implement the gcdump capture mechanism using `Microsoft.Diagnostics.NETCore.Client`.
 
@@ -308,7 +308,7 @@ Implement the gcdump capture mechanism using `Microsoft.Diagnostics.NETCore.Clie
 
 ---
 
-**Task 3.4: HeapDiff Engine** ⬜ Pending
+**Task 3.4: HeapDiff Engine** ✅ Done
 
 Parse two `.gcdump` files with ClrMD and compute the object count/size delta between them.
 
@@ -408,7 +408,7 @@ Establish the application skeleton that every subsequent task builds on: layout,
 
 ---
 
-**Task 4.2: Real-Time Memory Overview Page** ⬜ Pending
+**Task 4.2: Real-Time Memory Overview Page** ✅ Done
 
 Build the live monitoring view: stacked area chart for managed vs. unmanaged memory, GC pause time chart, stat cards, and auto-refreshing data hooks.
 

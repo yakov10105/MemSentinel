@@ -1,38 +1,65 @@
 "use client";
 
-import { useHealth } from "@/lib/hooks/useHealth";
+import { Suspense, useEffect, useState } from "react";
+import { useMemoryMetrics } from "@/lib/hooks/useMemoryMetrics";
+import { ManagedVsUnmanagedChart } from "@/components/charts/ManagedVsUnmanagedChart";
+import { GCPauseTimeChart } from "@/components/charts/GCPauseTimeChart";
+import { MemoryStatsBar } from "@/components/overview/MemoryStatsBar";
+import { ThresholdStatusBadge } from "@/components/overview/ThresholdStatusBadge";
+import { useSetHeaderSlot } from "@/app/header-slot-context";
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
+
+const RSS_LIMIT_MB = Number(process.env.NEXT_PUBLIC_RSS_LIMIT_MB ?? 512);
 
 export default function HomePage() {
-  const { data, isLoading, isError } = useHealth();
+  const [isPaused, setIsPaused] = useState(false);
+  const { data: snapshots = [] } = useMemoryMetrics(isPaused ? false : 5_000);
+  const setHeaderSlot = useSetHeaderSlot();
+
+  const latest = snapshots[snapshots.length - 1];
+
+  useEffect(() => {
+    if (!latest) return;
+    setHeaderSlot(
+      <ThresholdStatusBadge rssMb={latest.rssMb} limitMb={RSS_LIMIT_MB} />
+    );
+    return () => setHeaderSlot(null);
+  }, [latest, setHeaderSlot]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-950 text-white">
-      <h1 className="text-3xl font-bold tracking-tight">MemSentinel</h1>
-
-      <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-900 px-6 py-4">
-        {isLoading && (
-          <>
-            <span className="h-3 w-3 animate-pulse rounded-full bg-yellow-400" />
-            <span className="text-sm text-gray-400">Connecting to agent…</span>
-          </>
-        )}
-
-        {isError && (
-          <>
-            <span className="h-3 w-3 rounded-full bg-red-500" />
-            <span className="text-sm text-red-400">Agent unreachable</span>
-          </>
-        )}
-
-        {data && (
-          <>
-            <span className="h-3 w-3 rounded-full bg-green-500" />
-            <span className="text-sm text-green-400">
-              Agent connected — v{data.version}
-            </span>
-          </>
-        )}
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-white">Memory Overview</h1>
+        <button
+          onClick={() => setIsPaused((p) => !p)}
+          className={`rounded-md border px-4 py-1.5 text-sm font-medium transition-colors ${
+            isPaused
+              ? "border-green-600 text-green-400 hover:bg-green-900/30"
+              : "border-gray-700 text-gray-300 hover:bg-gray-800"
+          }`}
+        >
+          {isPaused ? "Resume" : "Pause"}
+        </button>
       </div>
-    </main>
+
+      <MemoryStatsBar snapshots={snapshots} />
+
+      <Suspense fallback={<PageSkeleton />}>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-sm font-medium text-gray-400">
+              Managed vs Unmanaged Memory
+            </h2>
+            <ManagedVsUnmanagedChart snapshots={snapshots} />
+          </div>
+          <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-sm font-medium text-gray-400">
+              GC Pause Time
+            </h2>
+            <GCPauseTimeChart snapshots={snapshots} />
+          </div>
+        </div>
+      </Suspense>
+    </div>
   );
 }

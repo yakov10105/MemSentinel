@@ -1,81 +1,64 @@
-# Task 3.1 — EventPipe Live GC Metrics
+# Task 4.2 — Real-Time Memory Overview Page
 
-## Goal
-Replace zeroed `HeapMetadata` from `LinuxMemoryProvider.GetHeapMetadataAsync` with real
-Gen0/Gen1/Gen2/LOH/POH values streamed from the target process via EventPipe.
+**Branch:** `task/4.2-memory-overview-page`  
+**Phase branch:** `phase/4-dashboard`
 
-**DoD:** `GrowthVelocity.ManagedLeakMbPerMinute` is non-zero after calling `/leak/managed`;
-logs show real Gen2/LOH values.
+## Scope
 
----
+Build the live monitoring view on `/`: stacked area chart (managed vs. unmanaged), GC pause time chart, stat cards with sparklines, threshold badge in the header, and pause/resume control.
 
 ## Layers Touched
-- `MemSentinel.Core` — new interface + two providers
-- `MemSentinel.Agent` — DI registration, Worker wiring, Log entry
-- `MemSentinel.Core.csproj` — add `Microsoft.Diagnostics.Tracing.TraceEvent` NuGet
 
----
+- `src/MemSentinel.Dashboard/lib/hooks/` — new `useMemoryMetrics` hook
+- `src/MemSentinel.Dashboard/components/charts/` — two new Recharts wrappers
+- `src/MemSentinel.Dashboard/components/overview/` — stat bar + threshold badge
+- `src/MemSentinel.Dashboard/components/layout/Header.tsx` — context slot wiring
+- `src/MemSentinel.Dashboard/app/` — new `HeaderSlotContext`, updated `layout.tsx` + `page.tsx`
+
+## Pre-conditions (already done)
+
+- `MemorySnapshot` interface exists in `lib/api/types.ts` ✅
+- `mockMemorySnapshots` (60 points × 5 s) exists in `lib/api/mocks/mockMemorySnapshot.ts` ✅
+- `useMockFlag()` exists ✅
+- `ChartWrapper` (SSR-safe `dynamic`) exists ✅
 
 ## Implementation Steps
 
-- [x] **Step 1 — NuGet: add TraceEvent to Core**
-  - Add `Microsoft.Diagnostics.Tracing.TraceEvent` to `MemSentinel.Core.csproj`
-  - Needed for `EventPipeEventSource` to parse `GC/HeapStats` events
-  - Run `dotnet build` — 0 errors
+- [x] 1. **`useMemoryMetrics` hook** — `lib/hooks/useMemoryMetrics.ts`  
+  React Query with `refetchInterval: intervalMs`. Mock mode: maintain a `useRef` cursor that advances one index per refetch over `mockMemorySnapshots`, returning a sliding 60-point window. Real mode: `GET /metrics/live` via `apiClient`.
 
-- [x] **Step 2 — Define `IGCMetricsProvider` in `Core/Collectors/`**
-  - File: `src/MemSentinel.Core/Collectors/IGCMetricsProvider.cs`
-  - Single method: `ValueTask<HeapMetadata> GetAsync(CancellationToken ct)`
-  - Run `dotnet build` — 0 errors
+- [x] 2. **`HeaderSlotContext`** — `app/header-slot-context.tsx`  
+  React context (`createContext<ReactNode>`) + `HeaderSlotProvider` wrapper and `useHeaderSlot` / `useSetHeaderSlot` hooks. Needed so the Overview page can inject `<ThresholdStatusBadge />` into the shared header without prop-drilling through `layout.tsx`.
 
-- [x] **Step 3 — Implement `NullGCMetricsProvider`**
-  - File: `src/MemSentinel.Core/Collectors/NullGCMetricsProvider.cs`
-  - Returns `new HeapMetadata(0, 0, 0, 0, 0, DateTimeOffset.UtcNow)` — Windows/Mock fallback
-  - Run `dotnet build` — 0 errors
+- [x] 3. **Wire `HeaderSlotProvider` into layout** — `app/layout.tsx` + `components/layout/Header.tsx`  
+  Wrap `<Providers>` children with `HeaderSlotProvider`; replace `<div id="header-slot" />` in `Header.tsx` with `useHeaderSlot()` rendering.
 
-- [x] **Step 4 — Implement `EventPipeGCMetricsProvider`**
-  - File: `src/MemSentinel.Core/Collectors/EventPipeGCMetricsProvider.cs`
-  - Constructor takes `int pid`; implements `IGCMetricsProvider` + `IAsyncDisposable`
-  - Starts a background `Task.Run` loop on first `GetAsync` call (lazy init via `SemaphoreSlim(1,1)`)
-  - Session: `DiagnosticsClient.StartEventPipeSession` with provider
-    `Microsoft-Windows-DotNETRuntime`, keyword `0x1` (GCKeyword), level `Verbose`
-  - Parses `GC/HeapStats` event via `EventPipeEventSource`; extracts
-    `GenerationSize0/1/2/3/4` -> `HeapMetadata`
-  - Stores latest value in a `volatile HeapSnapshot` wrapper (lock-free read path)
-  - `DisposeAsync` cancels the background loop and stops the session
-  - Run `dotnet build` — 0 errors
+- [x] 4. **`<ThresholdStatusBadge />`** — `components/overview/ThresholdStatusBadge.tsx`  
+  Pill reading `rssMb` vs. `NEXT_PUBLIC_RSS_LIMIT_MB` (default 512). Renders `Healthy` (green, ≤70%), `Warning` (amber, >70%), `Critical` (red, >85%). Pure presentational — receives `rssMb` and `limitMb` as props.
 
-- [x] **Step 5 — Register in DI (`CoreExtensions.cs`)**
-  - Add `IGCMetricsProvider` registration after the `IMemoryProvider` block
-  - Linux: `EventPipeGCMetricsProvider(pid)` — same `pid` resolution logic as LinuxMemoryProvider
-  - Non-Linux: `NullGCMetricsProvider`
-  - Register as Singleton
-  - Run `dotnet build` — 0 errors
+- [x] 5. **`<ManagedVsUnmanagedChart />`** — `components/charts/ManagedVsUnmanagedChart.tsx`  
+  Recharts `AreaChart` inside `ChartWrapper`. Stacked `Area` series: Gen0 (`--color-gen0`), Gen1, Gen2, LOH, POH, then a non-stacked `Area` for `nativeMb` (muted `--color-native`). X-axis: relative time labels (`-5m` … `now`). Y-axis: MB, `domain: ['auto', 'auto']`.
 
-- [x] **Step 6 — Wire into `Worker.DoWorkAsync`**
-  - Add `IGCMetricsProvider gcMetricsProvider` to `Worker` primary constructor
-  - Replace `await memoryProvider.GetHeapMetadataAsync(stoppingToken)` with
-    `await gcMetricsProvider.GetAsync(stoppingToken)`
-  - Add `Log.GCHeapStats(...)` call after reading heap (Info level)
-  - Run `dotnet build` — 0 errors
+- [x] 6. **`<GCPauseTimeChart />`** — `components/charts/GCPauseTimeChart.tsx`  
+  Recharts `LineChart` inside `ChartWrapper` for `gcPausePercent`. `ReferenceLine y={10}` with amber label "Warning". Line stroke switches to `--color-critical` (`#ef4444`) if any point in the window exceeds 10%.
 
-- [x] **Step 7 — Add `GCHeapStats` LoggerMessage to `Log.cs`**
-  - File: `src/MemSentinel.Agent/Logging/Log.cs`
-  - Message: `"GC heap stats: Gen0={Gen0Mb:F2}MB Gen1={Gen1Mb:F2}MB Gen2={Gen2Mb:F2}MB LOH={LohMb:F2}MB POH={PohMb:F2}MB"`
-  - Level: `Information`
-  - Run `dotnet build` — 0 errors
+- [x] 7. **`<MemoryStatsBar />`** — `components/overview/MemoryStatsBar.tsx`  
+  Four stat cards (Current RSS, Gen2 Size, LOH Size, GC Pause %). Each card: current value, mini sparkline of last 10 points (Recharts `LineChart` tiny, no axes), coloured delta badge comparing latest vs. previous point (`+N MB` green / `-N MB` red).
 
-- [x] **Step 8 — Final build + PRD update**
-  - Run `dotnet build` — confirm 0 warnings, 0 errors
-  - Update `docs/prd.md` Task 3.1 checkboxes to Done
+- [x] 8. **Assemble `/` page** — `app/page.tsx`  
+  - `useMemoryMetrics(5_000)` drives all components  
+  - `<MemoryStatsBar />` full-width at top  
+  - Two-column grid: `<ManagedVsUnmanagedChart />` | `<GCPauseTimeChart />`  
+  - Pause / Resume toggle: `isPaused` state; when paused pass `refetchInterval: false`, freeze on last data  
+  - `useSetHeaderSlot` to inject `<ThresholdStatusBadge />` with current RSS  
+  - Wrap chart grid in `<Suspense fallback={<PageSkeleton />}>`
 
----
+- [x] 9. **Build verification** — `npm run build` must pass with 0 TypeScript errors
 
-## Acceptance Criteria
-- [ ] `IGCMetricsProvider` defined in `Core/Collectors/`
-- [ ] `EventPipeGCMetricsProvider` starts EventPipe session with GCKeyword 0x1
-- [ ] `GC/HeapStats` event parsed; `HeapMetadata` populated with real Gen0-POH sizes
-- [ ] `NullGCMetricsProvider` registered for non-Linux (returns all zeros)
-- [ ] `Worker` uses `IGCMetricsProvider` — no longer calls `memoryProvider.GetHeapMetadataAsync`
-- [ ] Log entry `GCHeapStats` emitted each poll cycle
-- [ ] `dotnet build` 0 warnings, 0 errors
+## Acceptance Criteria (DoD)
+
+- Overview page auto-refreshes at 5 s in `NEXT_PUBLIC_USE_MOCKS=true` mode
+- Pausing and resuming works without remounting charts
+- `<ManagedVsUnmanagedChart />` renders all five managed series stacked correctly
+- `<ThresholdStatusBadge />` appears in the top header bar
+- `npm run build` passes with 0 TypeScript errors
